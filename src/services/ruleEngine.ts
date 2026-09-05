@@ -133,3 +133,5 @@ export function matchSymptomRule(
 }
 
 // TODO: refine specialist mapping logic
+
+// TODO: test severity scores

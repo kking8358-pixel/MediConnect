@@ -26,7 +26,7 @@ interface DoctorDirectoryProps {
 }
 
 export const DoctorDirectory: React.FC<DoctorDirectoryProps> = ({ initialSpecialty, initialReschedule }) => {
-  const { language } = useAuth();
+  const { language, user, openAuthModal } = useAuth();
   const { doctors, hospitals } = useAppData();
   const t = translations[language];
 
@@ -310,7 +310,13 @@ export const DoctorDirectory: React.FC<DoctorDirectoryProps> = ({ initialSpecial
                       </span>
                     </div>
                     <button
-                      onClick={() => setBookingDoctor(doc)}
+                      onClick={() => {
+                        if (!user) {
+                          openAuthModal('signin');
+                          return;
+                        }
+                        setBookingDoctor(doc);
+                      }}
                       className="px-4 py-2 border border-ink bg-ink hover:bg-ink-soft text-paper text-[10px] font-mono font-bold uppercase flex items-center gap-2 transition-colors"
                     >
                       <Calendar className="w-3.5 h-3.5" />

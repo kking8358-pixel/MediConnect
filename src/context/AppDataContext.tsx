@@ -17,6 +17,39 @@ import {
   INITIAL_REMINDERS,
   INITIAL_REPORTS
 } from '../data/mockData';
+import {
+  checkApiHealth,
+  apiGetDoctors,
+  apiGetHospitals,
+  apiGetRules,
+  apiGetAppointments,
+  apiGetReports,
+  apiGetReminders,
+  apiGetSymptomChecks,
+  apiGetNotifications,
+  apiCreateRule,
+  apiUpdateRule,
+  apiDeleteRule,
+  apiToggleRule,
+  apiCreateHospital,
+  apiUpdateHospital,
+  apiDeleteHospital,
+  apiCreateDoctor,
+  apiUpdateDoctor,
+  apiVerifyDoctor,
+  apiCreateSymptomCheck,
+  apiCreateReport,
+  apiShareReport,
+  apiAddDoctorNote,
+  apiBookAppointment,
+  apiUpdateAppointmentStatus,
+  apiCreateReminder,
+  apiUpdateReminder,
+  apiDeleteReminder,
+  apiLogReminderDose,
+  apiCreateNotification,
+  apiMarkNotificationRead
+} from '../services/api';
 
 interface AppDataContextType {
   // Rules
@@ -62,6 +95,10 @@ interface AppDataContextType {
   markNotificationRead: (id: string) => void;
   activeDoseAlert: { reminder: MedicineReminder; time: string } | null;
   dismissDoseAlert: () => void;
+
+  // Database Connection Status
+  isDbConnected: boolean;
+  refreshFromDb: () => Promise<void>;
 }
 
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
@@ -98,6 +135,8 @@ export function isReminderDueToday(rem: MedicineReminder, now: Date = new Date()
 }
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
+
   // Load or initialize Rules
   const [rules, setRules] = useState<Rule[]>(() => {
     const saved = localStorage.getItem('mc_rules');
@@ -172,7 +211,53 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [activeDoseAlert, setActiveDoseAlert] = useState<{ reminder: MedicineReminder; time: string } | null>(null);
 
-  // Sync to LocalStorage
+  // Initial fetch from MongoDB Atlas if server is running
+  const refreshFromDb = async () => {
+    try {
+      const health = await checkApiHealth();
+      const connected = health.online && health.database === 'connected';
+      setIsDbConnected(connected);
+
+      if (connected) {
+        const [
+          dbDocs,
+          dbHosps,
+          dbRules,
+          dbApts,
+          dbReps,
+          dbRems,
+          dbChecks,
+          dbNotifs
+        ] = await Promise.allSettled([
+          apiGetDoctors(),
+          apiGetHospitals(),
+          apiGetRules(),
+          apiGetAppointments(),
+          apiGetReports(),
+          apiGetReminders(),
+          apiGetSymptomChecks(),
+          apiGetNotifications()
+        ]);
+
+        if (dbDocs.status === 'fulfilled' && dbDocs.value.length > 0) setDoctors(dbDocs.value);
+        if (dbHosps.status === 'fulfilled' && dbHosps.value.length > 0) setHospitals(dbHosps.value);
+        if (dbRules.status === 'fulfilled' && dbRules.value.length > 0) setRules(dbRules.value);
+        if (dbApts.status === 'fulfilled' && dbApts.value.length > 0) setAppointments(dbApts.value);
+        if (dbReps.status === 'fulfilled' && dbReps.value.length > 0) setReports(dbReps.value);
+        if (dbRems.status === 'fulfilled' && dbRems.value.length > 0) setReminders(dbRems.value);
+        if (dbChecks.status === 'fulfilled' && dbChecks.value.length > 0) setSymptomChecks(dbChecks.value);
+        if (dbNotifs.status === 'fulfilled' && dbNotifs.value.length > 0) setNotifications(dbNotifs.value);
+      }
+    } catch {
+      setIsDbConnected(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshFromDb();
+  }, []);
+
+  // Sync to LocalStorage (fallback persistence)
   useEffect(() => {
     localStorage.setItem('mc_rules', JSON.stringify(rules));
   }, [rules]);
@@ -284,44 +369,55 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Rules CRUD
   const addRule = (newRule: Omit<Rule, 'id'>) => {
     const id = `rule-${Date.now()}`;
-    setRules(prev => [ { ...newRule, id }, ...prev ]);
+    const item = { ...newRule, id };
+    setRules(prev => [item, ...prev]);
+    apiCreateRule(item).catch(() => {});
   };
 
   const updateRule = (id: string, updated: Partial<Rule>) => {
     setRules(prev => prev.map(r => r.id === id ? { ...r, ...updated } : r));
+    apiUpdateRule(id, updated).catch(() => {});
   };
 
   const deleteRule = (id: string) => {
     setRules(prev => prev.filter(r => r.id !== id));
+    apiDeleteRule(id).catch(() => {});
   };
 
   const toggleRuleActive = (id: string) => {
     setRules(prev => prev.map(r => r.id === id ? { ...r, active: !r.active } : r));
+    apiToggleRule(id).catch(() => {});
   };
 
   // Directory CRUD
   const addHospital = (hosp: Omit<Hospital, 'id'>) => {
     const id = `hosp-${Date.now()}`;
-    setHospitals(prev => [ { ...hosp, id }, ...prev ]);
+    const item = { ...hosp, id };
+    setHospitals(prev => [item, ...prev]);
+    apiCreateHospital(item).catch(() => {});
   };
 
   const updateHospital = (id: string, updated: Partial<Hospital>) => {
     setHospitals(prev => prev.map(h => h.id === id ? { ...h, ...updated } : h));
+    apiUpdateHospital(id, updated).catch(() => {});
   };
 
   const deleteHospital = (id: string) => {
     setHospitals(prev => prev.filter(h => h.id !== id));
+    apiDeleteHospital(id).catch(() => {});
   };
 
   const addDoctor = (doc: Omit<Doctor, 'id'>): Doctor => {
     const id = `doc-${Date.now()}`;
     const newDoc: Doctor = { ...doc, id };
-    setDoctors(prev => [ newDoc, ...prev ]);
+    setDoctors(prev => [newDoc, ...prev]);
+    apiCreateDoctor(newDoc).catch(() => {});
     return newDoc;
   };
 
   const updateDoctor = (id: string, updated: Partial<Doctor>) => {
     setDoctors(prev => prev.map(d => d.id === id ? { ...d, ...updated } : d));
+    apiUpdateDoctor(id, updated).catch(() => {});
   };
 
   const verifyDoctor = (doctorId: string, verified: boolean) => {
@@ -330,6 +426,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       localStorage.setItem('mc_doctors', JSON.stringify(updated));
       return updated;
     });
+
+    apiVerifyDoctor(doctorId, verified).catch(() => {});
 
     // Custom event to update active user in AuthContext if this doctor is logged in
     window.dispatchEvent(new CustomEvent('mediconnect_doctor_verified', {
@@ -355,6 +453,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createdAt: new Date().toISOString()
     };
     setSymptomChecks(prev => [newCheck, ...prev]);
+    apiCreateSymptomCheck(newCheck).catch(() => {});
     return newCheck;
   };
 
@@ -366,6 +465,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createdAt: new Date().toISOString()
     };
     setReports(prev => [newReport, ...prev]);
+    apiCreateReport(newReport).catch(() => {});
     return newReport;
   };
 
@@ -379,6 +479,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       return r;
     }));
+    apiShareReport(reportId, doctorId).catch(() => {});
   };
 
   const addDoctorNoteToReport = (reportId: string, note: Omit<DoctorNote, 'id' | 'createdAt'>) => {
@@ -396,6 +497,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       return r;
     }));
+    apiAddDoctorNote(reportId, newNote).catch(() => {});
   };
 
   // Appointments
@@ -408,11 +510,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createdAt: new Date().toISOString()
     };
     setAppointments(prev => [newApt, ...prev]);
+    apiBookAppointment(newApt).catch(() => {});
     return newApt;
   };
 
   const updateAppointmentStatus = (id: string, status: Appointment['status']) => {
     setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+    apiUpdateAppointmentStatus(id, status).catch(() => {});
   };
 
   // Medicine Reminders
@@ -424,14 +528,17 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       logs: []
     };
     setReminders(prev => [newRem, ...prev]);
+    apiCreateReminder(newRem).catch(() => {});
   };
 
   const updateReminder = (id: string, updated: Partial<MedicineReminder>) => {
     setReminders(prev => prev.map(r => r.id === id ? { ...r, ...updated } : r));
+    apiUpdateReminder(id, updated).catch(() => {});
   };
 
   const deleteReminder = (id: string) => {
     setReminders(prev => prev.filter(r => r.id !== id));
+    apiDeleteReminder(id).catch(() => {});
   };
 
   const logReminderDose = (reminderId: string, state: 'taken' | 'skipped' | 'snoozed') => {
@@ -448,8 +555,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           ...r,
           logs: [logItem, ...(r.logs || [])]
         };
-        // A snooze re-arms the alert 15 minutes out; any other action
-        // consumes a pending snooze.
         if (state === 'snoozed') {
           next.snoozedUntil = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
         } else {
@@ -459,6 +564,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       return r;
     }));
+    apiLogReminderDose(reminderId, state, logItem.scheduledAt).catch(() => {});
   };
 
   // Notifications
@@ -470,10 +576,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createdAt: new Date().toISOString()
     };
     setNotifications(prev => [item, ...prev]);
+    apiCreateNotification(item).catch(() => {});
   };
 
   const markNotificationRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    apiMarkNotificationRead(id).catch(() => {});
   };
 
   const dismissDoseAlert = () => {
@@ -514,7 +622,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addNotification,
         markNotificationRead,
         activeDoseAlert,
-        dismissDoseAlert
+        dismissDoseAlert,
+        isDbConnected,
+        refreshFromDb
       }}
     >
       {children}

@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Calendar as CalendarIcon,
   Clock,
   CheckCircle2,
   Building,
-  FileText
+  FileText,
+  Lock,
+  LogIn
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Doctor } from '../../types';
@@ -27,8 +29,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   initialReportId,
   rescheduleAppointmentId
 }) => {
-  const { language, user } = useAuth();
-  const { reports, bookAppointment, updateAppointmentStatus, addNotification } = useAppData();
+  const { language, user, openAuthModal } = useAuth();
+  const { reports, appointments, bookAppointment, updateAppointmentStatus, addNotification } = useAppData();
   const t = translations[language];
 
   // Only offer the current patient's own records for attachment.
@@ -76,14 +78,48 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     ]
   );
 
+  // Set of already booked time slots for this doctor on the selected date
+  const bookedSlots = new Set(
+    appointments
+      .filter((a) =>
+        a.doctorId === doctor.id &&
+        a.date === selectedDate &&
+        (a.status === 'booked' || a.status === 'rescheduled') &&
+        a.id !== rescheduleAppointmentId
+      )
+      .map((a) => a.timeSlot)
+  );
+
+  // If current slot is taken, auto-select the first available slot
+  useEffect(() => {
+    if (bookedSlots.has(selectedSlot)) {
+      const firstAvailable = slots.find((s) => !bookedSlots.has(s));
+      if (firstAvailable) {
+        setSelectedSlot(firstAvailable);
+      }
+    }
+  }, [selectedDate, appointments, slots]);
+
   const handleConfirmBooking = () => {
+    if (!user) {
+      openAuthModal('signin');
+      return;
+    }
+
+    if (bookedSlots.has(selectedSlot)) {
+      alert(language === 'bn' ? 'এই সময়টি ইতিমধ্যেই অন্য একজন বুক করেছেন। অনুগ্রহ করে অন্য সময় বেছে নিন।' : 'This time slot is already booked. Please choose an available time slot.');
+      return;
+    }
+
     const newApt = bookAppointment({
-      patientId: user?.id || 'guest',
-      patientName: user?.name || 'Guest Patient',
-      patientPhone: user?.phone || '+880 1700-000000',
+      patientId: user.id,
+      patientName: user.name,
+      patientPhone: user.phone || '+880 1700-000000',
+      patientEmail: user.email,
       doctorId: doctor.id,
       doctorName: doctor.name,
       doctorSpecialty: doctor.specialty,
+      doctorEmail: doctor.email,
       hospitalName: doctor.hospitalName,
       date: selectedDate,
       timeSlot: selectedSlot,
@@ -98,7 +134,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     }
 
     addNotification({
-      userId: user?.id || 'guest',
+      userId: user.id,
       type: 'appointment',
       title: rescheduleAppointmentId ? 'Appointment Rescheduled' : 'Appointment Confirmed',
       message: rescheduleAppointmentId
@@ -184,25 +220,50 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
             {/* Time Slot Selection */}
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft flex items-center gap-1.5 mb-2">
-                <Clock className="w-3.5 h-3.5" />
-                <span>{t.bk_time_slots}</span>
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {slots.map((slot) => (
-                  <button
-                    key={slot}
-                    onClick={() => setSelectedSlot(slot)}
-                    className={`py-2 px-2 text-[10px] font-mono font-bold uppercase border transition-colors ${
-                      selectedSlot === slot
-                        ? 'bg-ink text-paper border-ink'
-                        : 'bg-paper border-line text-ink hover:bg-line'
-                    }`}
-                  >
-                    {slot}
-                  </button>
-                ))}
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>{t.bk_time_slots}</span>
+                </label>
+                {bookedSlots.size > 0 && (
+                  <span className="text-[9px] font-mono text-clinical-red uppercase font-bold">
+                    {bookedSlots.size} {bookedSlots.size === 1 ? 'Slot Booked' : 'Slots Booked'}
+                  </span>
+                )}
               </div>
+              <div className="grid grid-cols-3 gap-2">
+                {slots.map((slot) => {
+                  const isSlotTaken = bookedSlots.has(slot);
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      disabled={isSlotTaken}
+                      onClick={() => !isSlotTaken && setSelectedSlot(slot)}
+                      title={isSlotTaken ? (language === 'bn' ? 'এই সময়টি ইতিমধ্যেই বুক করা হয়েছে' : 'This time slot is already booked') : undefined}
+                      className={`py-2 px-2 text-[10px] font-mono font-bold uppercase border transition-all flex flex-col items-center justify-center gap-0.5 ${
+                        isSlotTaken
+                          ? 'bg-line/60 border-line text-ink-soft/40 cursor-not-allowed opacity-60 select-none'
+                          : selectedSlot === slot
+                          ? 'bg-ink text-paper border-ink'
+                          : 'bg-paper border-line text-ink hover:bg-line'
+                      }`}
+                    >
+                      <span className={isSlotTaken ? 'line-through' : ''}>{slot}</span>
+                      {isSlotTaken && (
+                        <span className="text-[8px] font-mono font-bold text-clinical-red uppercase tracking-tight">
+                          {language === 'bn' ? 'বুকড' : 'Unavailable'}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {slots.every((s) => bookedSlots.has(s)) && (
+                <p className="mt-2 text-[10px] font-mono text-clinical-red uppercase text-center border border-clinical-red/30 p-2 bg-clinical-red/5">
+                  {language === 'bn' ? 'এই তারিখের সব সময় বুকড হয়ে গেছে। অনুগ্রহ করে অন্য দিন নির্বাচন করুন।' : 'All slots on this date are fully booked. Please select another date.'}
+                </p>
+              )}
             </div>
 
             {/* Attach Health Report */}
@@ -240,14 +301,43 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               </span>
             </div>
 
-            {/* Submit */}
-            <button
-              onClick={handleConfirmBooking}
-              className="w-full py-3 border border-ink bg-ink hover:bg-ink-soft text-paper text-[11px] font-bold font-mono uppercase flex items-center justify-center gap-2 transition-colors mt-2"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>{rescheduleAppointmentId ? t.bk_confirm_reschedule : t.bk_confirm}</span>
-            </button>
+            {/* Authentication Required Notice if guest */}
+            {!user && (
+              <div className="p-3 border-2 border-dashed border-ink bg-line/20 flex items-start gap-3 mt-2">
+                <div className="p-1.5 border border-ink bg-ink text-paper shrink-0 mt-0.5">
+                  <Lock className="w-3.5 h-3.5" />
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-[10px] font-mono font-bold uppercase text-ink">
+                    {language === 'bn' ? 'সাইন ইন আবশ্যক' : 'Login Required to Book'}
+                  </p>
+                  <p className="text-[10px] font-mono text-ink-soft leading-tight">
+                    {language === 'bn'
+                      ? 'অ্যাপয়েন্টমেন্ট নিশ্চিত করতে দয়া করে সাইন ইন বা নিবন্ধন করুন।'
+                      : 'You must be signed in to confirm and save your appointment.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Submit / Login Button */}
+            {user ? (
+              <button
+                onClick={handleConfirmBooking}
+                className="w-full py-3 border border-ink bg-ink hover:bg-ink-soft text-paper text-[11px] font-bold font-mono uppercase flex items-center justify-center gap-2 transition-colors mt-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{rescheduleAppointmentId ? t.bk_confirm_reschedule : t.bk_confirm}</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => openAuthModal('signin')}
+                className="w-full py-3 border-2 border-ink bg-ink hover:bg-ink-soft text-paper text-[11px] font-bold font-mono uppercase flex items-center justify-center gap-2 transition-colors mt-2"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>{language === 'bn' ? 'সাইন ইন করে বুক করুন' : 'Sign In to Confirm Appointment'}</span>
+              </button>
+            )}
 
           </div>
         ) : (

@@ -32,7 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenEmergency
 }) => {
   const { user, currentRole, language, setLanguage, openAuthModal, logout } = useAuth();
-  const { notifications, markNotificationRead } = useAppData();
+  const { notifications, markNotificationRead, isDbConnected } = useAppData();
   const t = translations[language];
 
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
@@ -75,6 +75,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
               <span className="hidden sm:inline-block text-[9px] uppercase font-mono font-bold tracking-wider text-ink bg-paper border border-ink px-1.5 py-0.5">
                 CLINICAL
+              </span>
+              <span
+                title={isDbConnected ? 'Connected to MongoDB Atlas' : 'Running in offline/local storage fallback'}
+                className={`hidden md:inline-flex items-center gap-1.5 text-[9px] uppercase font-mono font-bold tracking-wider px-2 py-0.5 border ${
+                  isDbConnected
+                    ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                    : 'border-slate-300 bg-slate-100 text-slate-600'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${isDbConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                {isDbConnected ? 'Atlas DB' : 'Local'}
               </span>
             </div>
           </div>
@@ -228,42 +239,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <p className="text-[10px] font-mono uppercase text-ink-soft truncate">{user.email || user.phone}</p>
                     </div>
 
-                    <div className="space-y-1 text-[10px] font-mono font-bold uppercase">
+                    <div className="pt-1 text-[10px] font-mono font-bold uppercase">
                       <button
                         onClick={() => {
-                          openAuthModal('signin');
+                          logout();
+                          setActiveTab('dashboard');
                           setRoleDropdownOpen(false);
                         }}
-                        className="w-full text-left px-3 py-2 border border-transparent hover:border-ink text-ink transition-colors flex items-center gap-3"
+                        className="w-full text-left px-3 py-2 border border-transparent hover:border-clinical-red text-clinical-red transition-colors flex items-center gap-3"
                       >
-                        <UserIcon className="w-3.5 h-3.5" />
-                        <span>Switch Profile</span>
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Sign Out</span>
                       </button>
-
-                      <button
-                        onClick={() => {
-                          openAuthModal('signup');
-                          setRoleDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2 border border-transparent hover:border-ink text-ink transition-colors flex items-center gap-3"
-                      >
-                        <UserIcon className="w-3.5 h-3.5" />
-                        <span>Register Account</span>
-                      </button>
-
-                      <div className="pt-2 mt-2 border-t border-line">
-                        <button
-                          onClick={() => {
-                            logout();
-                            setActiveTab('dashboard');
-                            setRoleDropdownOpen(false);
-                          }}
-                          className="w-full text-left px-3 py-2 border border-transparent hover:border-clinical-red text-clinical-red transition-colors flex items-center gap-3"
-                        >
-                          <LogOut className="w-3.5 h-3.5" />
-                          <span>Sign Out</span>
-                        </button>
-                      </div>
                     </div>
                   </div>
                 )}

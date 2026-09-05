@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole, Language, Patient, Doctor, Admin } from '../types';
 import { INITIAL_PATIENT, INITIAL_DOCTORS, INITIAL_HOSPITALS } from '../data/mockData';
+import { apiLogin, apiRegisterPatient, apiRegisterDoctor, apiUpdateProfile } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -223,6 +224,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       passwordHash: data.password ? hashDemoPassword(data.password) : undefined,
     };
     upsertPatientRegistry(newPatient);
+    apiRegisterPatient({ ...newPatient, password: data.password }).catch(() => {});
     loginAsUser(newPatient);
     return newPatient;
   };
@@ -277,6 +279,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('mc_doctors', JSON.stringify(updated));
     } catch (e) {}
 
+    apiRegisterDoctor({ ...newDoctor, password: data.password }).catch(() => {});
+
     // Dispatch event so AppDataContext updates its state
     window.dispatchEvent(new CustomEvent('mediconnect_new_doctor_registered', {
       detail: newDoctor
@@ -299,6 +303,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const emailClean = input.toLowerCase();
     const digits = input.replace(/\D+/g, '');
+
+    // Try authenticating with backend / MongoDB Atlas first
+    try {
+      const res = await apiLogin(emailClean, pass);
+      if (res?.success && res.user) {
+        loginAsUser(res.user);
+        return true;
+      }
+    } catch (err: any) {
+      if (err.message === 'Incorrect password') {
+        return false;
+      }
+    }
 
     // Exact doctor match by email or exact phone digits (no substring leaks).
     const savedDocsRaw = localStorage.getItem('mc_doctors');
@@ -393,6 +410,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = (updatedData: Partial<Patient | Doctor | Admin>) => {
     setUser((prev) => {
       if (!prev) return null;
+      apiUpdateProfile(prev.id, updatedData).catch(() => {});
       return { ...prev, ...updatedData } as User;
     });
   };

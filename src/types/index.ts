@@ -148,9 +148,11 @@ export interface Appointment {
   patientId: string;
   patientName: string;
   patientPhone: string;
+  patientEmail?: string;
   doctorId: string;
   doctorName: string;
   doctorSpecialty: string;
+  doctorEmail?: string;
   hospitalName: string;
   date: string;
   timeSlot: string;

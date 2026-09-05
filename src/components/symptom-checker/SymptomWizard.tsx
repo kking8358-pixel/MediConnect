@@ -697,3 +697,5 @@ export const SymptomWizard: React.FC<SymptomWizardProps> = ({
     </div>
   );
 };
+
+// TODO: add smooth transitions between steps

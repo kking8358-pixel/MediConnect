@@ -163,3 +163,5 @@ export const HospitalMapRadar: React.FC<HospitalMapRadarProps> = ({
     </div>
   );
 };
+
+// TODO: fix map zoom level on load

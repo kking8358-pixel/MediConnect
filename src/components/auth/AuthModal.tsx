@@ -27,6 +27,7 @@ export const AuthModal: React.FC = () => {
     setIsAuthModalOpen,
     authModalMode,
     setAuthModalMode,
+    login,
     loginAsUser,
     registerPatient,
     registerDoctor,
@@ -41,6 +42,7 @@ export const AuthModal: React.FC = () => {
   const [signInPassword, setSignInPassword] = useState('');
   const [signInError, setSignInError] = useState('');
   const [regError, setRegError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Patient registration fields
   const [patientName, setPatientName] = useState('');
@@ -63,135 +65,143 @@ export const AuthModal: React.FC = () => {
 
   if (!isAuthModalOpen) return null;
 
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setSignInError('');
 
-    const emailClean = signInEmail.trim().toLowerCase();
-    const digits = signInEmail.replace(/\D+/g, '');
+    const emailClean = signInEmail.trim();
+    if (!emailClean) {
+      setSignInError(
+        language === 'bn'
+          ? 'অনুগ্রহ করে ইমেইল বা ফোন নম্বর দিন।'
+          : 'Please enter your email address or phone number.'
+      );
+      return;
+    }
 
-    // Mock auth still requires a password so the field is not decorative.
     if (!signInPassword || signInPassword.length < 4) {
-      setSignInError('Please enter your password (minimum 4 characters).');
+      setSignInError(
+        language === 'bn'
+          ? 'অনুগ্রহ করে পাসওয়ার্ড লিখুন (কমপক্ষে ৪ অক্ষর)।'
+          : 'Please enter your password (minimum 4 characters).'
+      );
       return;
     }
 
-    // Check in doctors list — exact email or exact phone digits only.
-    const foundDoc = doctors.find(
-      (d) =>
-        d.email.toLowerCase() === emailClean ||
-        (digits.length >= 10 && d.phone.replace(/\D+/g, '') === digits)
-    );
-    if (foundDoc) {
-      if (!passwordMatches(foundDoc, signInPassword)) {
-        setSignInError('Incorrect password for this account.');
+    setIsSubmitting(true);
+    try {
+      const result = await login(signInEmail, signInPassword);
+      if (!result.success) {
+        setSignInError(
+          result.error ||
+            (language === 'bn'
+              ? 'লগইন ব্যর্থ হয়েছে। তথ্য যাচাই করুন।'
+              : 'Sign in failed. Please check your credentials.')
+        );
         return;
       }
-      loginAsUser(foundDoc);
-      return;
-    }
 
-    // Check admin
-    if (emailClean.includes('admin')) {
-      if (!passwordMatches(ADMIN_USER, signInPassword)) {
-        setSignInError('Incorrect password for this account.');
-        return;
-      }
-      loginAsUser(ADMIN_USER);
-      return;
+      // Success
+      setSignInEmail('');
+      setSignInPassword('');
+      setSignInError('');
+      setIsAuthModalOpen(false);
+    } catch (err: any) {
+      setSignInError(err.message || 'Authentication error. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // Registered patient lookup (password enforced), then seed demo, then
-    // auto-provision unknown emails with the entered password as credential.
-    if (emailClean) {
-      let known: Patient | null = null;
-      try {
-        const raw = localStorage.getItem('mc_patients');
-        const all = raw ? (JSON.parse(raw) as Patient[]) : [];
-        known = all.find((p) => p.email.toLowerCase() === emailClean) || null;
-      } catch (e) { /* ignore */ }
-      if (known) {
-        if (!passwordMatches(known, signInPassword)) {
-          setSignInError('Incorrect password for this account.');
-          return;
-        }
-        loginAsUser(known);
-        return;
-      }
-      if (emailClean === INITIAL_PATIENT.email.toLowerCase()) {
-        if (!passwordMatches(INITIAL_PATIENT, signInPassword)) {
-          setSignInError('Incorrect password for this account.');
-          return;
-        }
-        loginAsUser(INITIAL_PATIENT);
-      } else {
-        const fresh: Patient = {
-          ...INITIAL_PATIENT,
-          id: `pat-${Date.now()}`,
-          email: emailClean,
-          name: emailClean.split('@')[0] || 'Patient User',
-          passwordHash: hashDemoPassword(signInPassword)
-        };
-        upsertPatientRegistry(fresh);
-        loginAsUser(fresh);
-      }
-      return;
-    }
-
-    setSignInError('Please enter a valid email or select a quick profile below.');
   };
 
-  const handleRegisterPatient = (e: React.FormEvent) => {
+  const handleRegisterPatient = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError('');
-    if (!patientName || !patientEmail) return;
+    if (!patientName.trim() || !patientEmail.trim()) {
+      setRegError(
+        language === 'bn'
+          ? 'নাম ও ইমেইল উভয়ই প্রদান করুন।'
+          : 'Please enter your full name and email address.'
+      );
+      return;
+    }
     if (!patientPassword || patientPassword.length < 4) {
-      setRegError('Please choose a password with at least 4 characters.');
+      setRegError(
+        language === 'bn'
+          ? 'পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে।'
+          : 'Please choose a password with at least 4 characters.'
+      );
       return;
     }
 
-    registerPatient({
-      name: patientName,
-      email: patientEmail,
-      phone: patientPhone || '+880 1700-000000',
-      age: parseInt(patientAge) || 28,
-      gender: patientGender,
-      password: patientPassword
-    });
+    setIsSubmitting(true);
+    try {
+      await registerPatient({
+        name: patientName.trim(),
+        email: patientEmail.trim().toLowerCase(),
+        phone: patientPhone.trim() || '+880 1700-000000',
+        age: parseInt(patientAge) || 28,
+        gender: patientGender,
+        password: patientPassword
+      });
 
-    confetti({
-      particleCount: 50,
-      spread: 60,
-      origin: { y: 0.6 }
-    });
+      confetti({
+        particleCount: 50,
+        spread: 60,
+        origin: { y: 0.6 }
+      });
+      setIsAuthModalOpen(false);
+    } catch (err: any) {
+      setRegError(err.message || 'Registration failed.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleRegisterDoctor = (e: React.FormEvent) => {
+  const handleRegisterDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError('');
-    if (!doctorName || !doctorEmail || !doctorBmdcReg) return;
+    if (!doctorName.trim() || !doctorEmail.trim() || !doctorBmdcReg.trim()) {
+      setRegError(
+        language === 'bn'
+          ? 'অনুগ্রহ করে সকল প্রয়োজনীয় তথ্য পূরণ করুন।'
+          : 'Please fill in all required doctor credential fields.'
+      );
+      return;
+    }
     if (!doctorPassword || doctorPassword.length < 4) {
-      setRegError('Please choose a password with at least 4 characters.');
+      setRegError(
+        language === 'bn'
+          ? 'পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে।'
+          : 'Please choose a password with at least 4 characters.'
+      );
       return;
     }
 
-    registerDoctor({
-      name: doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`,
-      email: doctorEmail,
-      phone: doctorPhone || '+880 1711-000000',
-      specialty: doctorSpecialty,
-      hospitalName: doctorHospital,
-      qualifications: doctorQualifications || 'MBBS, FCPS',
-      bmdcRegNumber: doctorBmdcReg,
-      consultationFee: parseInt(doctorFee) || 1200,
-      password: doctorPassword
-    });
+    setIsSubmitting(true);
+    try {
+      await registerDoctor({
+        name: doctorName.trim().startsWith('Dr.') ? doctorName.trim() : `Dr. ${doctorName.trim()}`,
+        email: doctorEmail.trim().toLowerCase(),
+        phone: doctorPhone.trim() || '+880 1711-000000',
+        specialty: doctorSpecialty,
+        hospitalName: doctorHospital,
+        qualifications: doctorQualifications.trim() || 'MBBS, FCPS',
+        bmdcRegNumber: doctorBmdcReg.trim(),
+        consultationFee: parseInt(doctorFee) || 1200,
+        password: doctorPassword
+      });
 
-    confetti({
-      particleCount: 60,
-      spread: 70,
-      origin: { y: 0.6 }
-    });
+      confetti({
+        particleCount: 60,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+      setIsAuthModalOpen(false);
+    } catch (err: any) {
+      setRegError(err.message || 'Doctor registration failed.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -293,11 +303,23 @@ export const AuthModal: React.FC = () => {
 
               <button
                 type="submit"
-                className="w-full py-2.5 border border-ink bg-ink hover:bg-ink-soft text-paper text-[11px] font-bold font-mono uppercase transition-colors flex items-center justify-center gap-2 mt-2"
+                disabled={isSubmitting}
+                className="w-full py-2.5 border border-ink bg-ink hover:bg-ink-soft text-paper text-[11px] font-bold font-mono uppercase transition-colors flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
               >
-                <span>Sign In to Account</span>
+                <span>{isSubmitting ? 'Authenticating...' : 'Sign In to Account'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
+
+              <div className="pt-3 border-t border-line text-[10px] font-mono text-ink-soft flex items-center justify-between">
+                <span>Don't have an account yet?</span>
+                <button
+                  type="button"
+                  onClick={() => { setAuthModalMode('signup'); setSignInError(''); }}
+                  className="font-bold underline text-ink hover:text-ink-soft uppercase"
+                >
+                  Create Account &rarr;
+                </button>
+              </div>
             </form>
           </div>
         )}
@@ -417,10 +439,11 @@ export const AuthModal: React.FC = () => {
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 border border-ink bg-ink hover:bg-ink-soft text-paper text-[11px] font-bold font-mono uppercase transition-colors flex items-center justify-center gap-2 mt-2"
+                  disabled={isSubmitting}
+                  className="w-full py-2.5 border border-ink bg-ink hover:bg-ink-soft text-paper text-[11px] font-bold font-mono uppercase transition-colors flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Register Patient Account</span>
+                  <span>{isSubmitting ? 'Registering Account...' : 'Register Patient Account'}</span>
                 </button>
               </form>
             )}
@@ -541,10 +564,11 @@ export const AuthModal: React.FC = () => {
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 border border-ink bg-ink hover:bg-ink-soft text-paper text-[11px] font-bold font-mono uppercase transition-colors flex items-center justify-center gap-2 mt-2"
+                  disabled={isSubmitting}
+                  className="w-full py-2.5 border border-ink bg-ink hover:bg-ink-soft text-paper text-[11px] font-bold font-mono uppercase transition-colors flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
                 >
                   <Stethoscope className="w-4 h-4" />
-                  <span>Submit Registration (Pending Verification)</span>
+                  <span>{isSubmitting ? 'Submitting Credentials...' : 'Submit Registration (Pending Verification)'}</span>
                 </button>
               </form>
             )}

@@ -29,7 +29,10 @@ router.post('/login', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (user.passwordHash && password) {
+    if (user.passwordHash) {
+      if (!password) {
+        return res.status(401).json({ error: 'Password is required' });
+      }
       const computed = hashPassword(password);
       if (user.passwordHash !== computed && user.passwordHash !== password) {
         return res.status(401).json({ error: 'Incorrect password' });

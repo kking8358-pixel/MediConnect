@@ -12,6 +12,7 @@ import reminderRoutes from './routes/reminderRoutes.js';
 import symptomCheckRoutes from './routes/symptomCheckRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import { buildDocumentationPDF } from './generateDocsPdf.js';
+import { testEmailConnection } from './services/emailService.js';
 
 dotenv.config();
 
@@ -47,6 +48,17 @@ app.get('/api/generate-docs-pdf', (_req, res) => {
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Test Email Notification Route
+app.get('/api/test-email', async (req, res) => {
+  try {
+    const to = req.query.to;
+    const result = await testEmailConnection(to);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

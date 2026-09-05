@@ -1,32 +1,29 @@
 import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
 dotenv.config();
 
-let nodemailerModule = null;
-try {
-  // Dynamically import nodemailer if installed
-  nodemailerModule = await import('nodemailer');
-} catch {
-  // nodemailer not installed yet, will use simulated logger fallback
-  nodemailerModule = null;
-}
-
 function getTransporter() {
-  if (!nodemailerModule) return null;
+  // Always read latest values from .env without requiring a server reboot
+  dotenv.config({ override: true });
 
-  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
   const port = Number(process.env.SMTP_PORT) || 587;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const user = process.env.SMTP_USER ? process.env.SMTP_USER.trim() : '';
+  const pass = process.env.SMTP_PASS ? process.env.SMTP_PASS.replace(/\s+/g, '').trim() : '';
 
   if (!user || !pass) {
     return null;
   }
 
-  return nodemailerModule.default.createTransport({
-    host,
-    port,
+  const isGmail = host.includes('gmail.com');
+
+  return nodemailer.createTransport({
+    ...(isGmail ? { service: 'gmail' } : { host, port }),
     secure: port === 465,
-    auth: { user, pass }
+    auth: { user, pass },
+    tls: {
+      rejectUnauthorized: false
+    }
   });
 }
 
@@ -35,7 +32,18 @@ function getTransporter() {
  * Gracefully falls back to formatted terminal simulation if SMTP is not configured.
  */
 async function sendMail({ to, subject, html, text }) {
-  const from = process.env.SMTP_FROM || '"MediConnect Health" <noreply@mediconnect.health>';
+  const user = process.env.SMTP_USER ? process.env.SMTP_USER.trim() : '';
+  let from = (process.env.SMTP_FROM || '').trim();
+
+  // Gmail SMTP strictly prohibits arbitrary From headers; must match authenticated user
+  if (user && user.includes('@gmail.com')) {
+    if (!from || !from.includes(user)) {
+      from = `"MediConnect Health" <${user}>`;
+    }
+  } else if (!from) {
+    from = '"MediConnect Health" <noreply@mediconnect.health>';
+  }
+
   const transporter = getTransporter();
 
   if (transporter) {
@@ -64,6 +72,56 @@ async function sendMail({ to, subject, html, text }) {
   console.log('========================================================================\n');
 
   return { success: true, mode: 'simulated' };
+}
+
+/**
+ * Test SMTP connection and dispatch a diagnostic email
+ */
+export async function testEmailConnection(toEmail) {
+  dotenv.config({ override: true });
+  const user = process.env.SMTP_USER ? process.env.SMTP_USER.trim() : '';
+  const pass = process.env.SMTP_PASS ? process.env.SMTP_PASS.replace(/\s+/g, '').trim() : '';
+
+  if (!user || !pass) {
+    return {
+      success: false,
+      error: 'SMTP_USER or SMTP_PASS is empty in .env. The system is operating in Terminal Simulation mode.',
+      mode: 'simulated'
+    };
+  }
+
+  const transporter = getTransporter();
+  if (!transporter) {
+    return { success: false, error: 'Failed to initialize Nodemailer transporter. Please verify SMTP_USER and SMTP_PASS in .env.' };
+  }
+
+  try {
+    await transporter.verify();
+  } catch (verifyErr) {
+    return {
+      success: false,
+      stage: 'smtp_auth_verification',
+      error: verifyErr.message,
+      suggestion: 'Ensure Gmail 2-Step Verification is active and use a 16-character Google App Password (not your primary password).'
+    };
+  }
+
+  const target = toEmail || user;
+  const result = await sendMail({
+    to: target,
+    subject: 'MediConnect SMTP Test Notification',
+    text: `Hello! This is a test email from your MediConnect platform. Your SMTP notification system is active and functioning properly!\nDispatched at: ${new Date().toISOString()}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; padding: 20px; border: 2px solid #0D6E6E; border-radius: 8px;">
+        <h2 style="color: #0D6E6E;">MediConnect Notification Test</h2>
+        <p>Your SMTP mail notification service is <strong>successfully configured and running</strong>!</p>
+        <p><strong>Dispatched to:</strong> ${target}</p>
+        <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+      </div>
+    `
+  });
+
+  return { success: true, target, result };
 }
 
 /**
@@ -151,15 +209,21 @@ MediConnect Clinical Coordination Team
           <li>Please arrive at the clinic 15 minutes ahead of your slot.</li>
           <li>Carry your photo ID and previous diagnostic investigations.</li>
         </ul>
-      </div>
-
       <p style="font-size: 11px; color: #888; margin-top: 24px; border-top: 1px dashed #ccc; padding-top: 12px;">
         MediConnect Healthcare Platform &bull; Automated notification. Please do not reply directly to this email.
       </p>
     </div>
   `;
 
-  return sendMail({ to: patientEmail, subject, text, html });
+  const adminUser = process.env.SMTP_USER ? process.env.SMTP_USER.trim() : '';
+  const isDemoEmail = !patientEmail || patientEmail.endsWith('@mediconnect.health') || patientEmail.endsWith('@example.com');
+  const targetEmail = (isDemoEmail && adminUser) ? adminUser : patientEmail;
+
+  if (isDemoEmail && adminUser) {
+    console.log(`[Mail Service] Note: Patient "${patientName}" has demo address (${patientEmail}). Delivering notification to configured SMTP inbox: ${adminUser}`);
+  }
+
+  return sendMail({ to: targetEmail, subject, text, html });
 }
 
 /**
@@ -242,5 +306,21 @@ MediConnect Clinical Coordination Team
     </div>
   `;
 
-  return sendMail({ to: doctorEmail, subject, text, html });
+  const adminUser = process.env.SMTP_USER ? process.env.SMTP_USER.trim() : '';
+  const isDemoEmail = !doctorEmail ||
+    doctorEmail.endsWith('@mediconnect.health') ||
+    doctorEmail.endsWith('@squarehospital.com') ||
+    doctorEmail.endsWith('@evercarebd.com') ||
+    doctorEmail.endsWith('@unitedhospital.com') ||
+    doctorEmail.endsWith('@labaid.com') ||
+    doctorEmail.endsWith('@dmch.gov.bd') ||
+    doctorEmail.endsWith('.gov.bd') ||
+    doctorEmail.endsWith('@example.com');
+  const targetEmail = (isDemoEmail && adminUser) ? adminUser : doctorEmail;
+
+  if (isDemoEmail && adminUser) {
+    console.log(`[Mail Service] Note: Doctor "${doctorName}" has mock hospital address (${doctorEmail}). Delivering notification to configured SMTP inbox: ${adminUser}`);
+  }
+
+  return sendMail({ to: targetEmail, subject, text, html });
 }

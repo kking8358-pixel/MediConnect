@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -n \"client,server\" -c \"cyan,magenta\" \"vite\" \"node --watch server/index.js\"",
+    "frontend": "vite",
+    "backend": "node --watch server/index.js",
+    "client": "vite",
     "dev:client": "vite",
     "dev:server": "node --watch server/index.js",
     "server": "node server/index.js",

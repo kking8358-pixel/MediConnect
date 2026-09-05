@@ -10,7 +10,7 @@ interface AuthContextType {
   token: string | null;
   setLanguage: (lang: Language) => void;
   switchRole: (role: UserRole) => void;
-  login: (emailOrPhone: string, pass: string) => Promise<boolean>;
+  login: (emailOrPhone: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   loginAsUser: (userToLogin: User) => void;
   registerPatient: (data: {
     name: string;
@@ -20,7 +20,7 @@ interface AuthContextType {
     gender?: 'male' | 'female' | 'other';
     bloodGroup?: string;
     password?: string;
-  }) => Patient;
+  }) => Promise<Patient>;
   registerDoctor: (data: {
     name: string;
     email: string;
@@ -31,7 +31,7 @@ interface AuthContextType {
     bmdcRegNumber: string;
     consultationFee?: number;
     password?: string;
-  }) => Doctor;
+  }) => Promise<Doctor>;
   verifyOtp: (code: string) => Promise<boolean>;
   logout: () => void;
   updateProfile: (updatedData: Partial<Patient | Doctor | Admin>) => void;
@@ -198,7 +198,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthModalOpen(false);
   };
 
-  const registerPatient = (data: {
+  const registerPatient = async (data: {
     name: string;
     email: string;
     phone: string;
@@ -206,13 +206,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     gender?: 'male' | 'female' | 'other';
     bloodGroup?: string;
     password?: string;
-  }): Patient => {
+  }): Promise<Patient> => {
+    const emailClean = data.email.trim().toLowerCase();
+    const phoneClean = data.phone.trim();
+
+    // Check if account already exists locally
+    const existing = readPatientRegistry().find(
+      (p) => p.email.toLowerCase() === emailClean || (phoneClean && p.phone === phoneClean)
+    );
+    if (existing) {
+      throw new Error('An account with this email address or phone number already exists.');
+    }
+
     const newPatient: Patient = {
       id: `pat-${Date.now()}`,
       role: 'patient',
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
+      name: data.name.trim(),
+      email: emailClean,
+      phone: phoneClean,
       isVerified: true,
       language: language,
       medicalHistory: [],
@@ -223,13 +234,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString(),
       passwordHash: data.password ? hashDemoPassword(data.password) : undefined,
     };
+
+    try {
+      const serverPatient = await apiRegisterPatient({ ...newPatient, password: data.password });
+      if (serverPatient && serverPatient.id) {
+        newPatient.id = serverPatient.id;
+      }
+    } catch (err: any) {
+      if (err.message && err.message.toLowerCase().includes('already exists')) {
+        throw err;
+      }
+    }
+
     upsertPatientRegistry(newPatient);
-    apiRegisterPatient({ ...newPatient, password: data.password }).catch(() => {});
     loginAsUser(newPatient);
     return newPatient;
   };
 
-  const registerDoctor = (data: {
+  const registerDoctor = async (data: {
     name: string;
     email: string;
     phone: string;
@@ -239,25 +261,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     bmdcRegNumber: string;
     consultationFee?: number;
     password?: string;
-  }): Doctor => {
+  }): Promise<Doctor> => {
+    const emailClean = data.email.trim().toLowerCase();
+    const phoneClean = data.phone.trim();
+
+    const savedDocsRaw = localStorage.getItem('mc_doctors');
+    let docPool = INITIAL_DOCTORS;
+    try {
+      if (savedDocsRaw) docPool = JSON.parse(savedDocsRaw);
+    } catch (e) {}
+
+    if (docPool.some((d) => d.email.toLowerCase() === emailClean)) {
+      throw new Error('A doctor with this email address is already registered.');
+    }
+
     const matchedHospital = INITIAL_HOSPITALS.find(
       (h) => h.name.toLowerCase() === data.hospitalName.trim().toLowerCase()
     );
     const newDoctor: Doctor = {
       id: `doc-${Date.now()}`,
       role: 'doctor',
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
+      name: data.name.trim(),
+      email: emailClean,
+      phone: phoneClean,
       isVerified: false, // Must be verified by Admin!
-      bmdcRegNumber: data.bmdcRegNumber,
+      bmdcRegNumber: data.bmdcRegNumber.trim(),
       language: language,
       avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80',
       specialty: data.specialty,
       experienceYears: 1,
       hospitalId: matchedHospital ? matchedHospital.id : 'hosp-1',
       hospitalName: matchedHospital ? matchedHospital.name : data.hospitalName,
-      qualifications: data.qualifications,
+      qualifications: data.qualifications.trim(),
       bio: 'Clinician registered with BMDC credentials pending administrative audit.',
       consultationFee: data.consultationFee || 1000,
       rating: 5.0,
@@ -271,15 +306,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       passwordHash: data.password ? hashDemoPassword(data.password) : undefined,
     };
 
+    try {
+      const serverDoc = await apiRegisterDoctor({ ...newDoctor, password: data.password });
+      if (serverDoc && serverDoc.id) {
+        newDoctor.id = serverDoc.id;
+      }
+    } catch (err: any) {
+      if (err.message && err.message.toLowerCase().includes('already exists')) {
+        throw err;
+      }
+    }
+
     // Save to localStorage doctors list
     try {
-      const savedDocs = localStorage.getItem('mc_doctors');
-      const existing = savedDocs ? JSON.parse(savedDocs) : INITIAL_DOCTORS;
-      const updated = [newDoctor, ...existing];
+      const updated = [newDoctor, ...docPool.filter((d) => d.id !== newDoctor.id)];
       localStorage.setItem('mc_doctors', JSON.stringify(updated));
     } catch (e) {}
-
-    apiRegisterDoctor({ ...newDoctor, password: data.password }).catch(() => {});
 
     // Dispatch event so AppDataContext updates its state
     window.dispatchEvent(new CustomEvent('mediconnect_new_doctor_registered', {
@@ -290,34 +332,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return newDoctor;
   };
 
-  const login = async (emailOrPhone: string, pass: string): Promise<boolean> => {
+  const login = async (
+    emailOrPhone: string,
+    pass: string
+  ): Promise<{ success: boolean; error?: string }> => {
     const input = emailOrPhone.trim();
-    // If phone number, trigger OTP simulation (normalize spaces/dashes).
-    if (/^\+?[\d\s\-()]{10,16}$/.test(input) && /\d{10,}/.test(input.replace(/\D+/g, ''))) {
-      setPendingPhone(input);
-      setIsOtpModalOpen(true);
-      return false;
+    if (!input) {
+      return {
+        success: false,
+        error: language === 'bn' ? 'অনুগ্রহ করে ইমেইল বা ফোন নম্বর দিন।' : 'Please enter your email address or phone number.'
+      };
     }
 
-    if (!pass || pass.length < 4) return false;
+    if (!pass || pass.length < 4) {
+      return {
+        success: false,
+        error: language === 'bn' ? 'পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে।' : 'Password must be at least 4 characters.'
+      };
+    }
 
     const emailClean = input.toLowerCase();
     const digits = input.replace(/\D+/g, '');
 
-    // Try authenticating with backend / MongoDB Atlas first
+    // If phone number with no password, trigger OTP simulation (normalize spaces/dashes).
+    if (/^\+?[\d\s\-()]{10,16}$/.test(input) && !pass) {
+      setPendingPhone(input);
+      setIsOtpModalOpen(true);
+      return { success: false };
+    }
+
+    // 1. Try authenticating with backend / MongoDB Atlas first
     try {
       const res = await apiLogin(emailClean, pass);
       if (res?.success && res.user) {
         loginAsUser(res.user);
-        return true;
+        return { success: true };
       }
     } catch (err: any) {
-      if (err.message === 'Incorrect password') {
-        return false;
+      const msg = (err.message || '').toLowerCase();
+      if (msg.includes('password') || msg.includes('incorrect') || msg.includes('401')) {
+        return {
+          success: false,
+          error: language === 'bn' ? 'ভুল পাসওয়ার্ড। অনুগ্রহ করে আবার চেষ্টা করুন।' : 'Incorrect password for this account. Please try again.'
+        };
       }
     }
 
-    // Exact doctor match by email or exact phone digits (no substring leaks).
+    // 2. Exact doctor match by email or exact phone digits
     const savedDocsRaw = localStorage.getItem('mc_doctors');
     let docPool = INITIAL_DOCTORS;
     try {
@@ -329,43 +390,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? docPool.find((d) => d.phone.replace(/\D+/g, '') === digits)
         : undefined);
     if (foundDoc) {
-      if (!passwordMatches(foundDoc, pass)) return false;
+      if (!passwordMatches(foundDoc, pass)) {
+        return {
+          success: false,
+          error: language === 'bn' ? 'ভুল পাসওয়ার্ড। অনুগ্রহ করে আবার চেষ্টা করুন।' : 'Incorrect password for this doctor account.'
+        };
+      }
       loginAsUser(foundDoc);
-      return true;
+      return { success: true };
     }
 
-    // Direct admin match
-    if (emailClean === ADMIN_USER.email.toLowerCase() || emailClean.includes('admin')) {
-      if (!passwordMatches(ADMIN_USER, pass)) return false;
+    // 3. Strict Admin match (exact email match only - no substring leak!)
+    if (
+      emailClean === ADMIN_USER.email.toLowerCase() ||
+      emailClean === 'admin@mediconnect.health' ||
+      emailClean === 'admin@mediconnect.com' ||
+      emailClean === 'admin'
+    ) {
+      if (!passwordMatches(ADMIN_USER, pass)) {
+        return {
+          success: false,
+          error: language === 'bn' ? 'ভুল অ্যাডমিন পাসওয়ার্ড।' : 'Incorrect password for admin account.'
+        };
+      }
       loginAsUser(ADMIN_USER);
-      return true;
+      return { success: true };
     }
 
-    // Registered patient lookup first (password enforced), then seed demo.
+    // 4. Registered patient lookup in localStorage
     const knownPatient = readPatientRegistry().find(
-      (p) => p.email.toLowerCase() === emailClean
+      (p) =>
+        p.email.toLowerCase() === emailClean ||
+        (digits.length >= 10 && p.phone.replace(/\D+/g, '') === digits)
     );
     if (knownPatient) {
-      if (!passwordMatches(knownPatient, pass)) return false;
+      if (!passwordMatches(knownPatient, pass)) {
+        return {
+          success: false,
+          error: language === 'bn' ? 'ভুল পাসওয়ার্ড। অনুগ্রহ করে আবার চেষ্টা করুন।' : 'Incorrect password for this account.'
+        };
+      }
       loginAsUser(knownPatient);
-      return true;
+      return { success: true };
     }
-    if (emailClean === INITIAL_PATIENT.email.toLowerCase()) {
-      if (!passwordMatches(INITIAL_PATIENT, pass)) return false;
+
+    // 5. Seed demo patient
+    if (
+      emailClean === INITIAL_PATIENT.email.toLowerCase() ||
+      (digits.length >= 10 && INITIAL_PATIENT.phone.replace(/\D+/g, '') === digits)
+    ) {
+      if (!passwordMatches(INITIAL_PATIENT, pass)) {
+        return {
+          success: false,
+          error: language === 'bn' ? 'ভুল পাসওয়ার্ড। অনুগ্রহ করে আবার চেষ্টা করুন।' : 'Incorrect password for this account.'
+        };
+      }
       loginAsUser(INITIAL_PATIENT);
-    } else {
-      // Auto-provision unknown emails with the entered password as credential.
-      const fresh: Patient = {
-        ...INITIAL_PATIENT,
-        id: `pat-${Date.now()}`,
-        email: emailClean,
-        name: emailClean.split('@')[0] || 'Patient User',
-        passwordHash: hashDemoPassword(pass),
-      };
-      upsertPatientRegistry(fresh);
-      loginAsUser(fresh);
+      return { success: true };
     }
-    return true;
+
+    // 6. User DOES NOT EXIST anywhere! Reject login with clear error.
+    return {
+      success: false,
+      error:
+        language === 'bn'
+          ? 'এই ইমেইল বা ফোন নম্বরে কোনো অ্যাকাউন্ট নেই। অনুগ্রহ করে "Create Account" করুন।'
+          : 'No account found with this email or phone. Please click "Create Account" to register.'
+    };
   };
 
   const verifyOtp = async (code: string): Promise<boolean> => {

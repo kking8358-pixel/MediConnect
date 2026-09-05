@@ -279,3 +279,5 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     </div>
   );
 };
+
+// TODO: prevent booking in the past

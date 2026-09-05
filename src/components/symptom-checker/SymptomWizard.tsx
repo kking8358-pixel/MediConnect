@@ -699,3 +699,5 @@ export const SymptomWizard: React.FC<SymptomWizardProps> = ({
 };
 
 // TODO: add smooth transitions between steps
+
+// TODO: handle empty symptom states

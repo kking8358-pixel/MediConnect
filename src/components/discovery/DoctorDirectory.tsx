@@ -406,3 +406,5 @@ export const DoctorDirectory: React.FC<DoctorDirectoryProps> = ({ initialSpecial
     </div>
   );
 };
+
+// TODO: handle missing doctor profile images

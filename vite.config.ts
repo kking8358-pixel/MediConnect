@@ -12,6 +12,20 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true,
         secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err, _req, res) => {
+            // Graceful response when backend is restarting or temporarily unreachable
+            if (res && 'writeHead' in res && !res.headersSent) {
+              res.writeHead(503, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                status: 'offline',
+                message: 'Backend server restarting or temporarily unavailable',
+                database: 'disconnected',
+                detail: err.message
+              }));
+            }
+          });
+        }
       },
     },
   },

@@ -5,6 +5,20 @@ dotenv.config();
 
 let isConnected = false;
 
+// Register connection lifecycle listeners to avoid unhandled 'error' events
+mongoose.connection.on('connected', () => {
+  isConnected = true;
+});
+
+mongoose.connection.on('error', (err) => {
+  isConnected = false;
+  console.error('[MongoDB Atlas] Runtime Connection Error:', err.message);
+});
+
+mongoose.connection.on('disconnected', () => {
+  isConnected = false;
+});
+
 export async function connectDB() {
   const uri = process.env.MONGODB_URI;
 

@@ -430,8 +430,8 @@ export const AuthModal: React.FC = () => {
                     required
                     value={signInEmail}
                     onChange={(e) => setSignInEmail(e.target.value)}
-                    placeholder="E.G. DR.SHAMS@SQUAREHOSPITAL.COM"
-                    className="w-full pl-10 pr-4 py-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                    placeholder="e.g. dr.shams@squarehospital.com"
+                    className="w-full pl-10 pr-4 py-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                   />
                 </div>
               </div>
@@ -538,8 +538,8 @@ export const AuthModal: React.FC = () => {
                     required
                     value={patientName}
                     onChange={(e) => setPatientName(e.target.value)}
-                    placeholder="E.G. SAJIDUL ISLAM"
-                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                    placeholder="e.g. Sajidul Islam"
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                   />
                 </div>
 
@@ -551,8 +551,8 @@ export const AuthModal: React.FC = () => {
                       required
                       value={patientEmail}
                       onChange={(e) => setPatientEmail(e.target.value)}
-                      placeholder="PATIENT@MAIL.COM"
-                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                      placeholder="patient@mail.com"
+                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                     />
                   </div>
                   <div>
@@ -562,7 +562,7 @@ export const AuthModal: React.FC = () => {
                       value={patientPhone}
                       onChange={(e) => setPatientPhone(e.target.value)}
                       placeholder="+880 17..."
-                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                     />
                   </div>
                 </div>
@@ -574,7 +574,7 @@ export const AuthModal: React.FC = () => {
                       type="number"
                       value={patientAge}
                       onChange={(e) => setPatientAge(e.target.value)}
-                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                     />
                   </div>
                   <div>
@@ -582,11 +582,11 @@ export const AuthModal: React.FC = () => {
                     <select
                       value={patientGender}
                       onChange={(e) => setPatientGender(e.target.value as any)}
-                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                     >
-                      <option value="male">MALE</option>
-                      <option value="female">FEMALE</option>
-                      <option value="other">OTHER</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
                     </select>
                   </div>
                 </div>
@@ -658,8 +658,8 @@ export const AuthModal: React.FC = () => {
                     required
                     value={doctorName}
                     onChange={(e) => setDoctorName(e.target.value)}
-                    placeholder="E.G. DR. NAZMUL HUDA"
-                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                    placeholder="e.g. Dr. Nazmul Huda"
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                   />
                 </div>
 
@@ -671,8 +671,8 @@ export const AuthModal: React.FC = () => {
                       required
                       value={doctorEmail}
                       onChange={(e) => setDoctorEmail(e.target.value)}
-                      placeholder="DR.NAME@HOSPITAL.COM"
-                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                      placeholder="dr.name@hospital.com"
+                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                     />
                   </div>
                   <div>
@@ -682,7 +682,7 @@ export const AuthModal: React.FC = () => {
                       value={doctorPhone}
                       onChange={(e) => setDoctorPhone(e.target.value)}
                       placeholder="+880 17..."
-                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                     />
                   </div>
                 </div>
@@ -695,8 +695,8 @@ export const AuthModal: React.FC = () => {
                       required
                       value={doctorBmdcReg}
                       onChange={(e) => setDoctorBmdcReg(e.target.value)}
-                      placeholder="E.G. BMDC-A-99241"
-                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                      placeholder="e.g. BMDC-A-99241"
+                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                     />
                   </div>
                   <div>
@@ -704,7 +704,7 @@ export const AuthModal: React.FC = () => {
                     <select
                       value={doctorSpecialty}
                       onChange={(e) => setDoctorSpecialty(e.target.value)}
-                      className="w-full p-2.5 bg-paper border border-line text-[10px] font-bold font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                      className="w-full p-2.5 bg-paper border border-line text-[10px] font-bold font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                     >
                       <option value="General Physician">General Physician</option>
                       <option value="Cardiologist">Cardiologist</option>
@@ -725,8 +725,8 @@ export const AuthModal: React.FC = () => {
                       type="text"
                       value={doctorHospital}
                       onChange={(e) => setDoctorHospital(e.target.value)}
-                      placeholder="E.G. SQUARE HOSPITALS LTD."
-                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                      placeholder="e.g. Square Hospitals Ltd."
+                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                     />
                   </div>
                   <div>
@@ -736,7 +736,7 @@ export const AuthModal: React.FC = () => {
                       value={doctorFee}
                       onChange={(e) => setDoctorFee(e.target.value)}
                       placeholder="1200"
-                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                      className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                     />
                   </div>
                 </div>
@@ -747,8 +747,8 @@ export const AuthModal: React.FC = () => {
                     type="text"
                     value={doctorQualifications}
                     onChange={(e) => setDoctorQualifications(e.target.value)}
-                    placeholder="E.G. MBBS, FCPS"
-                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                    placeholder="e.g. MBBS, FCPS"
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                   />
                 </div>
 
@@ -844,8 +844,8 @@ export const AuthModal: React.FC = () => {
                       required
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="E.G. DOCTOR@HOSPITAL.COM OR +880..."
-                      className="w-full pl-10 pr-4 py-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                      placeholder="e.g. doctor@hospital.com or +880..."
+                      className="w-full pl-10 pr-4 py-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
                     />
                   </div>
                 </div>

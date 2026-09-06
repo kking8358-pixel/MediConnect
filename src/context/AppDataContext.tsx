@@ -435,13 +435,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       { day: 'Sat', slots: ['09:00 AM', '11:30 AM', '02:00 PM', '04:30 PM'] }
     ];
     const newDoc: Doctor = {
-      role: 'doctor',
-      availability: defaultAvailability,
-      rating: 5.0,
-      ratingCount: 0,
-      experienceYears: 5,
       avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80',
       ...doc,
+      availability: doc.availability && doc.availability.length > 0 ? doc.availability : defaultAvailability,
       id
     };
     setDoctors(prev => {

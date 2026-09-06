@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Stethoscope,
   Calendar,
@@ -10,16 +10,20 @@ import {
   ShieldAlert,
   Lock,
   CheckCircle2,
-  FileText
+  FileText,
+  Camera,
+  Upload,
+  X
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
 import { translations } from '../../i18n/translations';
 import { Doctor, HealthReport } from '../../types';
 
 export const DoctorDashboard: React.FC = () => {
-  const { language, user } = useAuth();
-  const { appointments, reports, addDoctorNoteToReport, updateAppointmentStatus } = useAppData();
+  const { language, user, updateProfile } = useAuth();
+  const { appointments, reports, addDoctorNoteToReport, updateAppointmentStatus, updateDoctor } = useAppData();
   const t = translations[language];
 
   const currentDoctor = user as Doctor;
@@ -28,6 +32,289 @@ export const DoctorDashboard: React.FC = () => {
   const [prescriptionInput, setPrescriptionInput] = useState('');
   const [adviceInput, setAdviceInput] = useState('');
   const [rxSuccess, setRxSuccess] = useState(false);
+
+  // Profile Photo Upload State
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [previewAvatar, setPreviewAvatar] = useState<string>(currentDoctor?.avatar || '');
+  const [customUrlInput, setCustomUrlInput] = useState('');
+  const [uploadError, setUploadError] = useState('');
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const DOCTOR_AVATAR_PRESETS = [
+    { label: 'Specialist 1', url: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80' },
+    { label: 'Specialist 2', url: 'https://images.unsplash.com/photo-1594824813576-90e6a8efee5e?auto=format&fit=crop&w=400&q=80' },
+    { label: 'Specialist 3', url: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80' },
+    { label: 'Specialist 4', url: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&w=400&q=80' },
+    { label: 'Specialist 5', url: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&w=400&q=80' },
+    { label: 'Specialist 6', url: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?auto=format&fit=crop&w=400&q=80' },
+  ];
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUploadError('');
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError(
+        language === 'bn'
+          ? 'অনুগ্রহ করে একটি ছবি ফাইল (JPG, PNG, WebP) নির্বাচন করুন।'
+          : 'Please select a valid image file (JPG, PNG, WebP).'
+      );
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError(
+        language === 'bn'
+          ? 'ছবির সাইজ ১০ মেগাবাইটের কম হতে হবে।'
+          : 'Image file size must be less than 10MB.'
+      );
+      return;
+    }
+
+    setIsProcessingFile(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxDim = 400;
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const optimized = canvas.toDataURL('image/jpeg', 0.88);
+            setPreviewAvatar(optimized);
+          } else {
+            setPreviewAvatar(event.target?.result as string);
+          }
+        } catch (err) {
+          setPreviewAvatar(event.target?.result as string);
+        } finally {
+          setIsProcessingFile(false);
+        }
+      };
+      img.onerror = () => {
+        setUploadError('Failed to decode image file.');
+        setIsProcessingFile(false);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      setUploadError('Failed to read image file.');
+      setIsProcessingFile(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSavePhoto = () => {
+    if (!previewAvatar) return;
+
+    // Update AuthContext session user (propagates to Navbar and session store)
+    updateProfile({ avatar: previewAvatar });
+
+    // Update AppDataContext doctors list (propagates to DoctorDirectory, etc.)
+    if (currentDoctor?.id) {
+      updateDoctor(currentDoctor.id, { avatar: previewAvatar });
+    }
+
+    setUploadSuccess(true);
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.6 }
+    });
+
+    setTimeout(() => {
+      setIsPhotoModalOpen(false);
+      setUploadSuccess(false);
+      setUploadError('');
+    }, 900);
+  };
+
+  const renderPhotoModal = () => {
+    if (!isPhotoModalOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-paper/90 backdrop-blur-sm animate-fade-in font-sans text-ink">
+        <div className="relative w-full max-w-lg chart-panel p-6 sm:p-7 max-h-[92vh] overflow-y-auto custom-scrollbar shadow-2xl border-2 border-ink space-y-5">
+          {/* Close Button */}
+          <button
+            onClick={() => { setIsPhotoModalOpen(false); setUploadError(''); }}
+            className="absolute top-5 right-5 p-1 border border-transparent hover:border-ink hover:bg-line transition-colors text-ink"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Header */}
+          <div>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider border-b border-ink pb-0.5 inline-block mb-1">
+              Clinical Practitioner Identity
+            </span>
+            <h2 className="text-xl font-bold uppercase tracking-tight flex items-center gap-2">
+              <Camera className="w-5 h-5" />
+              <span>Upload Profile Picture</span>
+            </h2>
+            <p className="text-[11px] font-mono text-ink-soft mt-1 uppercase">
+              Update your professional medical portrait displayed to patients and in directory searches.
+            </p>
+          </div>
+
+          {uploadError && (
+            <div className="p-3 border border-clinical-red bg-paper text-clinical-red text-[10px] font-mono font-bold uppercase flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <span>{uploadError}</span>
+            </div>
+          )}
+
+          {uploadSuccess && (
+            <div className="p-3 border border-emerald-600 bg-emerald-50 text-emerald-900 text-[10px] font-mono font-bold uppercase flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+              <span>Profile picture updated successfully!</span>
+            </div>
+          )}
+
+          {/* Avatar Preview */}
+          <div className="flex flex-col sm:flex-row items-center gap-5 p-4 border border-line bg-paper-raised">
+            <div className="relative shrink-0">
+              <img
+                src={previewAvatar || currentDoctor?.avatar || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80'}
+                alt="Avatar Preview"
+                className="w-24 h-24 rounded-sm object-cover border-2 border-ink shadow-md"
+              />
+              <span className="absolute -bottom-2 -right-2 px-1.5 py-0.5 bg-ink text-paper text-[9px] font-mono font-bold uppercase">
+                PREVIEW
+              </span>
+            </div>
+            <div className="text-center sm:text-left space-y-1">
+              <h3 className="text-sm font-bold uppercase">{currentDoctor?.name}</h3>
+              <p className="text-[11px] font-mono text-ink-soft uppercase">{currentDoctor?.specialty} • {currentDoctor?.hospitalName}</p>
+              <p className="text-[10px] font-mono text-ink-soft">BMDC: {currentDoctor?.bmdcRegNumber || 'BMDC-A-Pending'}</p>
+            </div>
+          </div>
+
+          {/* File Upload Zone */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block">
+              Upload from Device (JPG, PNG, WebP)
+            </label>
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/png, image/jpeg, image/webp"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-line hover:border-ink bg-paper p-6 text-center cursor-pointer transition-colors space-y-2"
+            >
+              <Upload className="w-6 h-6 mx-auto text-ink-soft" />
+              <div>
+                <p className="text-xs font-bold uppercase">
+                  {isProcessingFile ? 'Processing Image...' : 'Click to Browse Image File'}
+                </p>
+                <p className="text-[10px] font-mono text-ink-soft uppercase mt-0.5">
+                  Supports high-resolution images &bull; auto-optimized for clinical profile
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Presets Row */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block">
+              Or Select Professional Medical Portrait
+            </label>
+            <div className="grid grid-cols-6 gap-2">
+              {DOCTOR_AVATAR_PRESETS.map((preset, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => { setPreviewAvatar(preset.url); setUploadError(''); }}
+                  className={`relative p-0.5 border transition-all ${
+                    previewAvatar === preset.url ? 'border-2 border-ink ring-2 ring-ink/20 scale-105' : 'border-line hover:border-ink'
+                  }`}
+                >
+                  <img
+                    src={preset.url}
+                    alt={preset.label}
+                    className="w-full h-12 object-cover rounded-none"
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom URL Input */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block">
+              Or Paste Image Web URL
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={customUrlInput}
+                onChange={(e) => setCustomUrlInput(e.target.value)}
+                placeholder="https://example.com/photo.jpg"
+                className="flex-1 px-3 py-2 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (customUrlInput.trim()) {
+                    setPreviewAvatar(customUrlInput.trim());
+                    setCustomUrlInput('');
+                  }
+                }}
+                className="px-3 py-2 border border-ink bg-paper text-ink hover:bg-ink hover:text-paper text-[10px] font-mono font-bold uppercase shrink-0"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
+            <button
+              type="button"
+              onClick={() => { setIsPhotoModalOpen(false); setUploadError(''); }}
+              className="px-4 py-2.5 border border-line bg-paper hover:bg-line text-[11px] font-bold font-mono uppercase text-ink-soft hover:text-ink transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSavePhoto}
+              disabled={!previewAvatar || isProcessingFile}
+              className="px-5 py-2.5 border border-ink bg-ink hover:bg-ink-soft text-paper text-[11px] font-bold font-mono uppercase flex items-center gap-2 transition-colors disabled:opacity-50"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Save Profile Picture</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // ROLE GUARD — patients/admins must never see the clinical workstation,
   // even if they navigate here directly.
@@ -50,11 +337,28 @@ export const DoctorDashboard: React.FC = () => {
           
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-line">
             <div className="flex items-center gap-4">
-              <img
-                src={currentDoctor?.avatar || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80'}
-                alt={currentDoctor?.name}
-                className="w-16 h-16 rounded-sm object-cover border border-line"
-              />
+              <div
+                className="relative group cursor-pointer shrink-0"
+                onClick={() => {
+                  setPreviewAvatar(currentDoctor?.avatar || '');
+                  setUploadError('');
+                  setIsPhotoModalOpen(true);
+                }}
+                title="Click to change profile picture"
+              >
+                <img
+                  src={currentDoctor?.avatar || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80'}
+                  alt={currentDoctor?.name}
+                  className="w-16 h-16 rounded-sm object-cover border border-line group-hover:opacity-80 transition-opacity"
+                />
+                <div className="absolute inset-0 bg-ink/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-sm text-paper">
+                  <Camera className="w-4 h-4" />
+                  <span className="text-[8px] font-mono font-bold uppercase mt-0.5">Upload</span>
+                </div>
+                <div className="absolute -bottom-1 -right-1 p-1 bg-ink text-paper border border-paper rounded-full shadow-sm">
+                  <Camera className="w-2.5 h-2.5" />
+                </div>
+              </div>
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-ink-soft border-b border-ink-soft pb-0.5">
@@ -74,9 +378,23 @@ export const DoctorDashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 border border-line bg-paper text-ink text-xs font-bold uppercase tracking-wider self-start sm:self-auto">
-              <Lock className="w-4 h-4 shrink-0" />
-              <span>Features Locked</span>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewAvatar(currentDoctor?.avatar || '');
+                  setUploadError('');
+                  setIsPhotoModalOpen(true);
+                }}
+                className="px-3 py-1.5 border border-ink bg-paper hover:bg-ink hover:text-paper text-ink text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>Upload Photo</span>
+              </button>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 border border-line bg-paper text-ink text-xs font-bold uppercase tracking-wider">
+                <Lock className="w-4 h-4 shrink-0" />
+                <span>Features Locked</span>
+              </div>
             </div>
           </div>
 
@@ -127,6 +445,8 @@ export const DoctorDashboard: React.FC = () => {
           </div>
 
         </div>
+
+        {renderPhotoModal()}
 
       </div>
     );
@@ -187,11 +507,28 @@ export const DoctorDashboard: React.FC = () => {
       {/* Doctor Header Banner */}
       <div className="chart-panel p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <img
-            src={currentDoctor?.avatar || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80'}
-            alt={currentDoctor?.name}
-            className="w-14 h-14 rounded-sm object-cover border border-line"
-          />
+          <div
+            className="relative group cursor-pointer shrink-0"
+            onClick={() => {
+              setPreviewAvatar(currentDoctor?.avatar || '');
+              setUploadError('');
+              setIsPhotoModalOpen(true);
+            }}
+            title="Click to change profile picture"
+          >
+            <img
+              src={currentDoctor?.avatar || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80'}
+              alt={currentDoctor?.name}
+              className="w-14 h-14 rounded-sm object-cover border border-line group-hover:opacity-80 transition-opacity"
+            />
+            <div className="absolute inset-0 bg-ink/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-sm text-paper">
+              <Camera className="w-4 h-4" />
+              <span className="text-[8px] font-mono font-bold uppercase mt-0.5">Upload</span>
+            </div>
+            <div className="absolute -bottom-1 -right-1 p-1 bg-ink text-paper border border-paper rounded-full shadow-sm">
+              <Camera className="w-2.5 h-2.5" />
+            </div>
+          </div>
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-ink-soft border-b border-ink-soft pb-0.5">
@@ -212,6 +549,18 @@ export const DoctorDashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => {
+              setPreviewAvatar(currentDoctor?.avatar || '');
+              setUploadError('');
+              setIsPhotoModalOpen(true);
+            }}
+            className="px-3.5 py-2.5 border border-ink bg-paper hover:bg-ink hover:text-paper text-[10px] font-mono font-bold uppercase flex items-center gap-1.5 transition-colors shrink-0"
+          >
+            <Camera className="w-3.5 h-3.5" />
+            <span>Upload Photo</span>
+          </button>
           <div className="p-3 bg-paper border border-line text-center min-w-[90px]">
             <span className="text-[10px] uppercase font-bold text-ink-soft block mb-1">Today's Visits</span>
             <span className="text-xl font-bold font-mono">{doctorAppointments.length}</span>
@@ -444,6 +793,8 @@ export const DoctorDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {renderPhotoModal()}
 
     </div>
   );

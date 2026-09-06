@@ -242,6 +242,8 @@ export const AdminDashboard: React.FC = () => {
       language: 'en',
       createdAt: new Date().toISOString(),
       avatar: docAvatar.trim() || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80',
+      rating: 5.0,
+      ratingCount: 1,
       availability: [
         { day: 'Mon', slots: ['09:00 AM', '11:00 AM', '03:00 PM', '05:00 PM'] },
         { day: 'Wed', slots: ['10:00 AM', '12:00 PM', '04:00 PM', '06:00 PM'] },

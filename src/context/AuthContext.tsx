@@ -1,7 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole, Language, Patient, Doctor, Admin } from '../types';
 import { INITIAL_PATIENT, INITIAL_DOCTORS, INITIAL_HOSPITALS } from '../data/mockData';
-import { apiLogin, apiRegisterPatient, apiRegisterDoctor, apiUpdateProfile } from '../services/api';
+import {
+  apiLogin,
+  apiRegisterPatient,
+  apiRegisterDoctor,
+  apiUpdateProfile,
+  apiForgotPassword,
+  apiResetPassword
+} from '../services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -40,9 +47,21 @@ interface AuthContextType {
   pendingPhone: string | null;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
-  authModalMode: 'signin' | 'signup';
-  setAuthModalMode: (mode: 'signin' | 'signup') => void;
-  openAuthModal: (mode?: 'signin' | 'signup') => void;
+  authModalMode: 'signin' | 'signup' | 'forgot-password';
+  setAuthModalMode: (mode: 'signin' | 'signup' | 'forgot-password') => void;
+  openAuthModal: (mode?: 'signin' | 'signup' | 'forgot-password') => void;
+  requestPasswordReset: (emailOrPhone: string) => Promise<{
+    success: boolean;
+    message?: string;
+    maskedEmail?: string;
+    code?: string;
+    error?: string;
+  }>;
+  resetPassword: (
+    emailOrPhone: string,
+    code: string,
+    newPassword: string
+  ) => Promise<{ success: boolean; message?: string; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -137,9 +156,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isOtpModalOpen, setIsOtpModalOpen] = useState<boolean>(false);
   const [pendingPhone, setPendingPhone] = useState<string | null>(null);
   
-  // Login / Signup Modal State
+  // Login / Signup / Forgot Password Modal State
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
-  const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin');
+  const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup' | 'forgot-password'>('signin');
 
   useEffect(() => {
     localStorage.setItem('mc_lang', language);
@@ -171,7 +190,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLanguageState(lang);
   };
 
-  const openAuthModal = (mode: 'signin' | 'signup' = 'signin') => {
+  const openAuthModal = (mode: 'signin' | 'signup' | 'forgot-password' = 'signin') => {
     setAuthModalMode(mode);
     setIsAuthModalOpen(true);
   };
@@ -506,6 +525,194 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const requestPasswordReset = async (emailOrPhone: string): Promise<{
+    success: boolean;
+    message?: string;
+    maskedEmail?: string;
+    code?: string;
+    error?: string;
+  }> => {
+    const clean = emailOrPhone.trim().toLowerCase();
+    if (!clean) {
+      return {
+        success: false,
+        error: language === 'bn' ? 'অনুগ্রহ করে ইমেইল বা ফোন নম্বর দিন।' : 'Please enter your registered email or phone number.'
+      };
+    }
+
+    // Try backend API first
+    try {
+      const res = await apiForgotPassword(clean);
+      if (res && res.success) {
+        return {
+          success: true,
+          message: res.message,
+          maskedEmail: res.maskedEmail,
+          code: res.code
+        };
+      }
+    } catch (apiErr: any) {
+      console.warn('Backend forgot-password error, checking local registry:', apiErr.message);
+    }
+
+    // Local fallback check (mock / offline data)
+    const savedDocsRaw = localStorage.getItem('mc_doctors');
+    let docPool = INITIAL_DOCTORS;
+    try {
+      if (savedDocsRaw) docPool = JSON.parse(savedDocsRaw);
+    } catch (e) {}
+
+    const localDoc = docPool.find(
+      (d) => d.email.toLowerCase() === clean || (d.phone && d.phone.trim() === clean)
+    );
+    const localPatients = readPatientRegistry();
+    const localPat = localPatients.find(
+      (p) => p.email.toLowerCase() === clean || (p.phone && p.phone.trim() === clean)
+    );
+    const isInitPatient = INITIAL_PATIENT.email.toLowerCase() === clean || INITIAL_PATIENT.phone === clean;
+    const isAdmin = ADMIN_USER.email.toLowerCase() === clean || ADMIN_USER.phone === clean;
+
+    const matchedUser = localDoc || localPat || (isInitPatient ? INITIAL_PATIENT : null) || (isAdmin ? ADMIN_USER : null);
+
+    if (!matchedUser) {
+      return {
+        success: false,
+        error: language === 'bn'
+          ? 'এই ইমেইল বা ফোন নম্বরে কোনো অ্যাকাউন্ট পাওয়া যায়নি।'
+          : 'No registered account found with this email or phone number.'
+      };
+    }
+
+    // Generate 6-digit simulation code
+    const simCode = Math.floor(100000 + Math.random() * 900000).toString();
+    localStorage.setItem(
+      'mc_reset_ticket',
+      JSON.stringify({
+        account: clean,
+        code: simCode,
+        expiresAt: Date.now() + 15 * 60 * 1000
+      })
+    );
+
+    const [userPart, domainPart] = (matchedUser.email || '').split('@');
+    const maskedEmail = userPart && domainPart
+      ? `${userPart.slice(0, 2)}***@${domainPart}`
+      : matchedUser.email || clean;
+
+    return {
+      success: true,
+      message: language === 'bn'
+        ? `নিরাপত্তা যাচাইকরণ কোড পাঠানো হয়েছে: ${maskedEmail}`
+        : `Security verification code dispatched to ${maskedEmail}`,
+      maskedEmail,
+      code: simCode
+    };
+  };
+
+  const resetPassword = async (
+    emailOrPhone: string,
+    code: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message?: string; error?: string }> => {
+    const clean = emailOrPhone.trim().toLowerCase();
+    const codeClean = code.trim();
+
+    if (!clean || !codeClean || !newPassword) {
+      return {
+        success: false,
+        error: language === 'bn' ? 'সব তথ্য পূরণ করুন।' : 'All fields are required.'
+      };
+    }
+    if (newPassword.length < 4) {
+      return {
+        success: false,
+        error: language === 'bn' ? 'পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে।' : 'Password must be at least 4 characters.'
+      };
+    }
+
+    // Try backend API first
+    let apiSuccess = false;
+    try {
+      const res = await apiResetPassword(clean, codeClean, newPassword);
+      if (res && res.success) {
+        apiSuccess = true;
+      }
+    } catch (apiErr: any) {
+      console.warn('Backend reset-password failed or offline:', apiErr.message);
+    }
+
+    // Also check local ticket
+    const ticketRaw = localStorage.getItem('mc_reset_ticket');
+    let validTicket = false;
+    if (ticketRaw) {
+      try {
+        const ticket = JSON.parse(ticketRaw);
+        if (
+          ticket.account === clean &&
+          ticket.code === codeClean &&
+          Date.now() <= ticket.expiresAt
+        ) {
+          validTicket = true;
+        }
+      } catch (e) {}
+    }
+
+    if (!apiSuccess && !validTicket) {
+      return {
+        success: false,
+        error: language === 'bn'
+          ? 'যাচাইকরণ কোডটি ভুল বা মেয়াদোত্তীর্ণ হয়েছে।'
+          : 'Invalid or expired verification code. Please check and try again.'
+      };
+    }
+
+    const newHash = hashDemoPassword(newPassword);
+
+    // Update in patient registry
+    const localPatients = readPatientRegistry();
+    const patIdx = localPatients.findIndex(
+      (p) => p.email.toLowerCase() === clean || (p.phone && p.phone.trim() === clean)
+    );
+    if (patIdx !== -1) {
+      localPatients[patIdx].passwordHash = newHash;
+      upsertPatientRegistry(localPatients[patIdx]);
+    }
+
+    // Update in doctor registry
+    const savedDocsRaw = localStorage.getItem('mc_doctors');
+    if (savedDocsRaw) {
+      try {
+        const docPool = JSON.parse(savedDocsRaw);
+        const docIdx = docPool.findIndex(
+          (d: Doctor) => d.email.toLowerCase() === clean || (d.phone && d.phone.trim() === clean)
+        );
+        if (docIdx !== -1) {
+          docPool[docIdx].passwordHash = newHash;
+          localStorage.setItem('mc_doctors', JSON.stringify(docPool));
+        }
+      } catch (e) {}
+    }
+
+    // If currently logged in user matches, update session
+    setUser((prev) => {
+      if (prev && (prev.email.toLowerCase() === clean || prev.phone === clean)) {
+        const updated = { ...prev, passwordHash: newHash };
+        localStorage.setItem('mc_user', JSON.stringify(updated));
+        return updated;
+      }
+      return prev;
+    });
+
+    localStorage.removeItem('mc_reset_ticket');
+
+    return {
+      success: true,
+      message: language === 'bn'
+        ? 'পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।'
+        : 'Password successfully updated. You may now sign in.'
+    };
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -529,7 +736,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsAuthModalOpen,
         authModalMode,
         setAuthModalMode,
-        openAuthModal
+        openAuthModal,
+        requestPasswordReset,
+        resetPassword
       }}
     >
       {children}

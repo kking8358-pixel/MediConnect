@@ -11,7 +11,6 @@ import reportRoutes from './routes/reportRoutes.js';
 import reminderRoutes from './routes/reminderRoutes.js';
 import symptomCheckRoutes from './routes/symptomCheckRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
-import { buildDocumentationPDF } from './generateDocsPdf.js';
 import { testEmailConnection } from './services/emailService.js';
 
 dotenv.config();
@@ -39,16 +38,6 @@ app.get('/api/health', (_req, res) => {
     database: isDbConnected() ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString()
   });
-});
-
-// PDF Documentation Re-Generator
-app.get('/api/generate-docs-pdf', (_req, res) => {
-  try {
-    const result = buildDocumentationPDF();
-    res.json({ success: true, ...result });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 });
 
 // Test Email Notification Route

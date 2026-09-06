@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Shield,
   Sliders,
@@ -11,7 +11,11 @@ import {
   ShieldCheck,
   Clock,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  X,
+  MapPin,
+  Mail,
+  Phone
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -42,8 +46,11 @@ export const AdminDashboard: React.FC = () => {
     deleteRule,
     toggleRuleActive,
     hospitals,
+    addHospital,
     deleteHospital,
     doctors,
+    addDoctor,
+    deleteDoctor,
     verifyDoctor,
     symptomChecks,
     reports,
@@ -51,11 +58,23 @@ export const AdminDashboard: React.FC = () => {
   } = useAppData();
   const t = translations[language];
 
-  const [activeTab, setActiveTab] = useState<'rules' | 'verifications' | 'directory' | 'analytics'>('rules');
+  const pendingDoctors = doctors.filter((d) => !d.isVerified);
+
+  // Directly show Pending Actions if any unverified doctors exist
+  const [activeTab, setActiveTab] = useState<'rules' | 'verifications' | 'directory' | 'analytics'>(() => {
+    return doctors.some((d) => !d.isVerified) ? 'verifications' : 'rules';
+  });
+
+  const hasAutoSwitched = useRef(false);
+  useEffect(() => {
+    if (!hasAutoSwitched.current && pendingDoctors.length > 0) {
+      setActiveTab('verifications');
+      hasAutoSwitched.current = true;
+    }
+  }, [pendingDoctors.length]);
+
   const [ruleSearch, setRuleSearch] = useState('');
   const [isAddRuleModalOpen, setIsAddRuleModalOpen] = useState(false);
-
-  const pendingDoctors = doctors.filter((d) => !d.isVerified);
 
   // New Rule Form State
   const [newSymptoms, setNewSymptoms] = useState('');
@@ -94,6 +113,164 @@ export const AdminDashboard: React.FC = () => {
       r.condition.toLowerCase().includes(ruleSearch.toLowerCase()) ||
       r.specialist.toLowerCase().includes(ruleSearch.toLowerCase()) ||
       r.symptoms.some((s) => s.toLowerCase().includes(ruleSearch.toLowerCase()))
+  );
+
+  // Directory Search State
+  const [hospitalSearch, setHospitalSearch] = useState('');
+  const [doctorSearch, setDoctorSearch] = useState('');
+
+  // Hospital Modal & Form State
+  const [isAddHospitalModalOpen, setIsAddHospitalModalOpen] = useState(false);
+  const [hospName, setHospName] = useState('');
+  const [hospCity, setHospCity] = useState('Dhaka');
+  const [hospAddress, setHospAddress] = useState('');
+  const [hospContact, setHospContact] = useState('');
+  const [hospEmergency, setHospEmergency] = useState('10678');
+  const [hospBeds, setHospBeds] = useState('300');
+  const [hospSpecialties, setHospSpecialties] = useState('Cardiology, Neurology, General Medicine, Emergency');
+  const [hospRating, setHospRating] = useState('4.8');
+  const [hospAmbulance, setHospAmbulance] = useState(true);
+  const [hospImage, setHospImage] = useState('');
+
+  const resetHospitalForm = () => {
+    setHospName('');
+    setHospCity('Dhaka');
+    setHospAddress('');
+    setHospContact('');
+    setHospEmergency('10678');
+    setHospBeds('300');
+    setHospSpecialties('Cardiology, Neurology, General Medicine, Emergency');
+    setHospRating('4.8');
+    setHospAmbulance(true);
+    setHospImage('');
+  };
+
+  const handleCreateHospital = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!hospName.trim() || !hospAddress.trim()) return;
+
+    const coordsByCity: Record<string, { lat: number; lng: number }> = {
+      'Dhaka': { lat: 23.8103, lng: 90.4125 },
+      'Chittagong': { lat: 22.3569, lng: 91.7832 },
+      'Sylhet': { lat: 24.8949, lng: 91.8687 },
+      'Rajshahi': { lat: 24.3745, lng: 88.6042 },
+      'Khulna': { lat: 22.8456, lng: 89.5403 }
+    };
+
+    const location = coordsByCity[hospCity] || { lat: 23.8103, lng: 90.4125 };
+    const specs = hospSpecialties
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    addHospital({
+      name: hospName.trim(),
+      city: hospCity.trim(),
+      address: hospAddress.trim(),
+      contact: hospContact.trim() || '+880 2 9831200',
+      emergencyContact: hospEmergency.trim() || '10678',
+      totalBeds: parseInt(hospBeds) || 250,
+      specialties: specs.length > 0 ? specs : ['General Medicine', 'Emergency'],
+      rating: parseFloat(hospRating) || 4.8,
+      ambulanceAvailable: hospAmbulance,
+      location,
+      image: hospImage.trim() || 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&w=800&q=80'
+    });
+
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.6 }
+    });
+    setIsAddHospitalModalOpen(false);
+    resetHospitalForm();
+  };
+
+  // Doctor Modal & Form State
+  const [isAddDoctorModalOpen, setIsAddDoctorModalOpen] = useState(false);
+  const [docName, setDocName] = useState('');
+  const [docEmail, setDocEmail] = useState('');
+  const [docPhone, setDocPhone] = useState('');
+  const [docBmdc, setDocBmdc] = useState('');
+  const [docSpecialty, setDocSpecialty] = useState('General Physician');
+  const [docHospitalId, setDocHospitalId] = useState('');
+  const [docQualifications, setDocQualifications] = useState('MBBS, FCPS');
+  const [docFee, setDocFee] = useState('1200');
+  const [docExp, setDocExp] = useState('8');
+  const [docBio, setDocBio] = useState('');
+  const [docVerified, setDocVerified] = useState(true);
+  const [docPassword, setDocPassword] = useState('doctor123');
+  const [docAvatar, setDocAvatar] = useState('');
+
+  const resetDoctorForm = () => {
+    setDocName('');
+    setDocEmail('');
+    setDocPhone('');
+    setDocBmdc('');
+    setDocSpecialty('General Physician');
+    setDocHospitalId(hospitals[0]?.id || 'hosp-1');
+    setDocQualifications('MBBS, FCPS');
+    setDocFee('1200');
+    setDocExp('8');
+    setDocBio('');
+    setDocVerified(true);
+    setDocPassword('doctor123');
+    setDocAvatar('');
+  };
+
+  const handleCreateDoctor = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!docName.trim() || !docEmail.trim() || !docBmdc.trim()) return;
+
+    const matchedHosp = hospitals.find((h) => h.id === docHospitalId) || hospitals[0];
+    const cleanName = docName.trim().startsWith('Dr.') ? docName.trim() : `Dr. ${docName.trim()}`;
+
+    addDoctor({
+      role: 'doctor',
+      name: cleanName,
+      email: docEmail.trim().toLowerCase(),
+      phone: docPhone.trim() || '+880 1711-000000',
+      bmdcRegNumber: docBmdc.trim(),
+      specialty: docSpecialty,
+      hospitalId: matchedHosp?.id || 'hosp-1',
+      hospitalName: matchedHosp?.name || 'Square Hospitals Ltd.',
+      qualifications: docQualifications.trim() || 'MBBS, FCPS',
+      experienceYears: parseInt(docExp) || 5,
+      consultationFee: parseInt(docFee) || 1200,
+      bio: docBio.trim() || `Specialist practitioner affiliated with ${matchedHosp?.name || 'MediConnect Partner Network'}.`,
+      isVerified: docVerified,
+      language: 'en',
+      createdAt: new Date().toISOString(),
+      avatar: docAvatar.trim() || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80',
+      availability: [
+        { day: 'Mon', slots: ['09:00 AM', '11:00 AM', '03:00 PM', '05:00 PM'] },
+        { day: 'Wed', slots: ['10:00 AM', '12:00 PM', '04:00 PM', '06:00 PM'] },
+        { day: 'Sat', slots: ['09:00 AM', '11:30 AM', '02:00 PM', '04:30 PM'] }
+      ]
+    });
+
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.6 }
+    });
+    setIsAddDoctorModalOpen(false);
+    resetDoctorForm();
+  };
+
+  const filteredHospitals = hospitals.filter(
+    (h) =>
+      h.name.toLowerCase().includes(hospitalSearch.toLowerCase()) ||
+      h.city.toLowerCase().includes(hospitalSearch.toLowerCase()) ||
+      (h.specialties && h.specialties.some((s) => s.toLowerCase().includes(hospitalSearch.toLowerCase())))
+  );
+
+  const filteredDoctors = doctors.filter(
+    (d) =>
+      d.name.toLowerCase().includes(doctorSearch.toLowerCase()) ||
+      d.specialty.toLowerCase().includes(doctorSearch.toLowerCase()) ||
+      d.hospitalName.toLowerCase().includes(doctorSearch.toLowerCase()) ||
+      (d.bmdcRegNumber && d.bmdcRegNumber.toLowerCase().includes(doctorSearch.toLowerCase()))
   );
 
   const handleCreateRule = (e: React.FormEvent) => {
@@ -222,10 +399,10 @@ export const AdminDashboard: React.FC = () => {
                 : 'hover:bg-line text-ink-soft hover:text-ink'
             }`}
           >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Verifications</span>
+            <Clock className="w-3.5 h-3.5" />
+            <span>Pending Actions</span>
             {pendingDoctors.length > 0 && (
-              <span className="px-1.5 py-0.5 border border-current font-bold text-[9px] animate-pulse">
+              <span className="px-1.5 py-0.5 bg-clinical-red text-paper font-bold text-[9px] animate-pulse">
                 {pendingDoctors.length}
               </span>
             )}
@@ -544,20 +721,57 @@ export const AdminDashboard: React.FC = () => {
       {activeTab === 'directory' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
+          {/* Partner Facilities Panel */}
           <div className="chart-panel p-5 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b border-ink pb-2">
-              <Building className="w-4 h-4" />
-              <span>Partner Facilities ({hospitals.length})</span>
-            </h3>
+            <div className="flex items-center justify-between border-b border-ink pb-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                <Building className="w-4 h-4" />
+                <span>Partner Facilities ({hospitals.length})</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsAddHospitalModalOpen(true)}
+                className="px-2.5 py-1.5 border border-ink bg-ink hover:bg-ink-soft text-paper text-[10px] font-bold font-mono uppercase flex items-center gap-1.5 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{t.admin_add_hospital || 'Add Facility'}</span>
+              </button>
+            </div>
+
+            {/* Hospital Search */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-ink-soft absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={hospitalSearch}
+                onChange={(e) => setHospitalSearch(e.target.value)}
+                placeholder="SEARCH FACILITIES BY NAME OR CITY..."
+                className="w-full pl-9 pr-3 py-2 bg-paper border border-line text-[11px] font-mono uppercase focus:outline-none focus:border-ink rounded-none"
+              />
+            </div>
 
             <div className="space-y-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-              {hospitals.map((hosp) => (
+              {filteredHospitals.map((hosp) => (
                 <div key={hosp.id} className="p-4 border border-line bg-paper flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h4 className="text-[11px] font-bold uppercase">{hosp.name}</h4>
                     <p className="text-[10px] font-mono text-ink-soft mt-1 uppercase">
-                      {hosp.city} • BEDS: {hosp.totalBeds} • ER: {hosp.emergencyContact}
+                      {hosp.city} • BEDS: {hosp.totalBeds || 'N/A'} • ER: {hosp.emergencyContact}
                     </p>
+                    {hosp.specialties && hosp.specialties.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {hosp.specialties.slice(0, 3).map((spec, i) => (
+                          <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 border border-line bg-paper-raised text-ink-soft uppercase">
+                            {spec}
+                          </span>
+                        ))}
+                        {hosp.specialties.length > 3 && (
+                          <span className="text-[9px] font-mono px-1 py-0.5 text-ink-soft">
+                            +{hosp.specialties.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="px-1.5 py-0.5 border border-line bg-paper-raised text-[10px] font-mono font-bold">
@@ -577,30 +791,92 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
               ))}
+              {filteredHospitals.length === 0 && (
+                <div className="p-6 border border-dashed border-line text-center text-[11px] font-mono text-ink-soft uppercase">
+                  No facilities found matching your search.
+                </div>
+              )}
             </div>
           </div>
 
+          {/* Specialist Directory Panel */}
           <div className="chart-panel p-5 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b border-ink pb-2">
-              <Stethoscope className="w-4 h-4" />
-              <span>Specialist Directory ({doctors.length})</span>
-            </h3>
+            <div className="flex items-center justify-between border-b border-ink pb-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                <Stethoscope className="w-4 h-4" />
+                <span>Specialist Directory ({doctors.length})</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsAddDoctorModalOpen(true)}
+                className="px-2.5 py-1.5 border border-ink bg-ink hover:bg-ink-soft text-paper text-[10px] font-bold font-mono uppercase flex items-center gap-1.5 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{t.admin_add_doctor || 'Add Doctor'}</span>
+              </button>
+            </div>
+
+            {/* Doctor Search */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-ink-soft absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={doctorSearch}
+                onChange={(e) => setDoctorSearch(e.target.value)}
+                placeholder="SEARCH SPECIALISTS BY NAME, FIELD, OR HOSPITAL..."
+                className="w-full pl-9 pr-3 py-2 bg-paper border border-line text-[11px] font-mono uppercase focus:outline-none focus:border-ink rounded-none"
+              />
+            </div>
 
             <div className="space-y-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-              {doctors.map((doc) => (
-                <div key={doc.id} className="p-4 border border-line bg-paper flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <img src={doc.avatar} alt={doc.name} className="w-10 h-10 rounded-sm object-cover border border-line" />
-                    <div>
-                      <h4 className="text-[11px] font-bold uppercase">{doc.name}</h4>
-                      <p className="text-[10px] font-mono text-ink-soft mt-1 uppercase">{doc.specialty} • {doc.hospitalName}</p>
+              {filteredDoctors.map((doc) => (
+                <div key={doc.id} className="p-3 border border-line bg-paper flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img src={doc.avatar || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80'} alt={doc.name} className="w-10 h-10 rounded-sm object-cover border border-line shrink-0" />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-[11px] font-bold uppercase truncate">{doc.name}</h4>
+                        {doc.isVerified ? (
+                          <span className="text-[8px] font-mono font-bold uppercase px-1 py-0.2 border border-line bg-paper-raised text-ink">
+                            Verified
+                          </span>
+                        ) : (
+                          <span className="text-[8px] font-mono font-bold uppercase px-1 py-0.2 border border-line text-ink-soft">
+                            Pending
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-mono text-ink-soft mt-0.5 uppercase truncate">
+                        {doc.specialty} • {doc.hospitalName}
+                      </p>
+                      <p className="text-[9px] font-mono text-ink-soft uppercase truncate">
+                        {doc.bmdcRegNumber || 'NO BMDC'} • EXP: {doc.experienceYears} YRS
+                      </p>
                     </div>
                   </div>
-                  <span className="font-mono text-[11px] font-bold border border-line px-2 py-1 bg-paper-raised">
-                    BDT {doc.consultationFee}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-mono text-[10px] font-bold border border-line px-2 py-1 bg-paper-raised">
+                      BDT {doc.consultationFee}
+                    </span>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Remove "${doc.name}" from the specialist directory?`)) {
+                          deleteDoctor(doc.id);
+                        }
+                      }}
+                      className="p-1.5 border border-line bg-paper hover:border-clinical-red hover:text-clinical-red transition-colors"
+                      title="Remove doctor"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
+              {filteredDoctors.length === 0 && (
+                <div className="p-6 border border-dashed border-line text-center text-[11px] font-mono text-ink-soft uppercase">
+                  No specialists found matching your search.
+                </div>
+              )}
             </div>
           </div>
 
@@ -782,6 +1058,411 @@ export const AdminDashboard: React.FC = () => {
                   className="flex-1 py-2.5 border border-ink bg-ink hover:bg-ink-soft text-paper text-[10px] font-bold font-mono uppercase transition-colors"
                 >
                   {editingRuleId ? 'Update Rule' : 'Save Rule'}
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ADD HOSPITAL MODAL */}
+      {isAddHospitalModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-paper/90 backdrop-blur-sm animate-fade-in">
+          <div className="chart-panel border-2 border-ink w-full max-w-lg p-6 shadow-none text-ink space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <h3 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+                <Building className="w-4 h-4" />
+                <span>{t.admin_add_hospital || 'Add Partner Facility'}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => { setIsAddHospitalModalOpen(false); resetHospitalForm(); }}
+                className="p-1 hover:bg-line text-ink-soft hover:text-ink"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateHospital} className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                  Facility Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={hospName}
+                  onChange={(e) => setHospName(e.target.value)}
+                  placeholder="E.G. SQUARE HOSPITALS LTD."
+                  className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    City / Division *
+                  </label>
+                  <select
+                    value={hospCity}
+                    onChange={(e) => setHospCity(e.target.value)}
+                    className="w-full p-2.5 bg-paper border border-line text-[11px] font-bold font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                  >
+                    <option value="Dhaka">Dhaka</option>
+                    <option value="Chittagong">Chittagong</option>
+                    <option value="Sylhet">Sylhet</option>
+                    <option value="Rajshahi">Rajshahi</option>
+                    <option value="Khulna">Khulna</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    Total Capacity (Beds)
+                  </label>
+                  <input
+                    type="number"
+                    value={hospBeds}
+                    onChange={(e) => setHospBeds(e.target.value)}
+                    placeholder="300"
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                  Physical Address *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={hospAddress}
+                  onChange={(e) => setHospAddress(e.target.value)}
+                  placeholder="E.G. 18/F, BIR UTTAM QAZI NURZZAMAN SARAK, PANTHAPATH"
+                  className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    General Contact Phone
+                  </label>
+                  <input
+                    type="text"
+                    value={hospContact}
+                    onChange={(e) => setHospContact(e.target.value)}
+                    placeholder="+880 2 8144400"
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-line focus:border-ink rounded-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    Emergency Hotline *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={hospEmergency}
+                    onChange={(e) => setHospEmergency(e.target.value)}
+                    placeholder="10678"
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                  Core Specialties (comma separated)
+                </label>
+                <input
+                  type="text"
+                  value={hospSpecialties}
+                  onChange={(e) => setHospSpecialties(e.target.value)}
+                  placeholder="Cardiology, Neurology, Emergency Care"
+                  className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    Initial Rating (1.0 - 5.0)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="1"
+                    max="5"
+                    value={hospRating}
+                    onChange={(e) => setHospRating(e.target.value)}
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                  />
+                </div>
+                <div className="flex items-end pb-2.5">
+                  <label className="flex items-center gap-2 cursor-pointer text-[11px] font-bold font-mono uppercase">
+                    <input
+                      type="checkbox"
+                      checked={hospAmbulance}
+                      onChange={(e) => setHospAmbulance(e.target.checked)}
+                      className="w-4 h-4 rounded-none accent-ink"
+                    />
+                    <span>24/7 Ambulance Fleet</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                  Photo URL (optional)
+                </label>
+                <input
+                  type="url"
+                  value={hospImage}
+                  onChange={(e) => setHospImage(e.target.value)}
+                  placeholder="https://images.unsplash.com/..."
+                  className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-3 border-t border-line">
+                <button
+                  type="button"
+                  onClick={() => { setIsAddHospitalModalOpen(false); resetHospitalForm(); }}
+                  className="flex-1 py-2.5 border border-line bg-paper hover:bg-line text-[10px] font-bold font-mono uppercase transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 border border-ink bg-ink hover:bg-ink-soft text-paper text-[10px] font-bold font-mono uppercase flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Save Partner Facility</span>
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ADD DOCTOR MODAL */}
+      {isAddDoctorModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-paper/90 backdrop-blur-sm animate-fade-in">
+          <div className="chart-panel border-2 border-ink w-full max-w-lg p-6 shadow-none text-ink space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <h3 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+                <Stethoscope className="w-4 h-4" />
+                <span>{t.admin_add_doctor || 'Add Specialist Doctor'}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => { setIsAddDoctorModalOpen(false); resetDoctorForm(); }}
+                className="p-1 hover:bg-line text-ink-soft hover:text-ink"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateDoctor} className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                  Doctor Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={docName}
+                  onChange={(e) => setDocName(e.target.value)}
+                  placeholder="E.G. DR. TARIQUL ISLAM"
+                  className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={docEmail}
+                    onChange={(e) => setDocEmail(e.target.value)}
+                    placeholder="DR.NAME@HOSPITAL.COM"
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    Mobile Contact *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={docPhone}
+                    onChange={(e) => setDocPhone(e.target.value)}
+                    placeholder="+880 17..."
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    BMDC Reg. Number *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={docBmdc}
+                    onChange={(e) => setDocBmdc(e.target.value)}
+                    placeholder="E.G. BMDC-A-54910"
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    Medical Specialty *
+                  </label>
+                  <select
+                    value={docSpecialty}
+                    onChange={(e) => setDocSpecialty(e.target.value)}
+                    className="w-full p-2.5 bg-paper border border-line text-[10px] font-bold font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                  >
+                    <option value="General Physician">General Physician</option>
+                    <option value="Cardiologist">Cardiologist</option>
+                    <option value="Neurologist">Neurologist</option>
+                    <option value="Dermatologist">Dermatologist</option>
+                    <option value="Gastroenterologist">Gastroenterologist</option>
+                    <option value="Pulmonologist">Pulmonologist</option>
+                    <option value="Orthopedic / Rheumatologist">Orthopedics</option>
+                    <option value="ENT Specialist">ENT Specialist</option>
+                    <option value="Pediatrician">Pediatrician</option>
+                    <option value="Gynecologist / Obstetrician">Gynecologist</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    Hospital Affiliation *
+                  </label>
+                  <select
+                    value={docHospitalId || hospitals[0]?.id || ''}
+                    onChange={(e) => setDocHospitalId(e.target.value)}
+                    className="w-full p-2.5 bg-paper border border-line text-[10px] font-bold font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                  >
+                    {hospitals.map((h) => (
+                      <option key={h.id} value={h.id}>
+                        {h.name} ({h.city})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    Consultation Fee (BDT) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={docFee}
+                    onChange={(e) => setDocFee(e.target.value)}
+                    placeholder="1500"
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    Academic Qualifications *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={docQualifications}
+                    onChange={(e) => setDocQualifications(e.target.value)}
+                    placeholder="E.G. MBBS, FCPS, MD"
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    Experience (Years)
+                  </label>
+                  <input
+                    type="number"
+                    value={docExp}
+                    onChange={(e) => setDocExp(e.target.value)}
+                    placeholder="8"
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                    Initial Login Password *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={docPassword}
+                    onChange={(e) => setDocPassword(e.target.value)}
+                    placeholder="doctor123"
+                    className="w-full p-2.5 bg-paper border border-line text-xs font-mono focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                  />
+                </div>
+                <div className="flex items-end pb-2.5">
+                  <label className="flex items-center gap-2 cursor-pointer text-[10px] font-bold font-mono uppercase">
+                    <input
+                      type="checkbox"
+                      checked={docVerified}
+                      onChange={(e) => setDocVerified(e.target.checked)}
+                      className="w-4 h-4 rounded-none accent-ink"
+                    />
+                    <span>Verify Immediately</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-ink-soft block mb-1">
+                  Clinical Bio & Profile
+                </label>
+                <textarea
+                  rows={2}
+                  value={docBio}
+                  onChange={(e) => setDocBio(e.target.value)}
+                  placeholder="SPECIALIST BACKGROUND, CLINICAL EXPERTISE..."
+                  className="w-full p-2.5 bg-paper border border-line text-xs font-mono uppercase focus:bg-paper-raised focus:outline-none focus:border-ink rounded-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-3 border-t border-line">
+                <button
+                  type="button"
+                  onClick={() => { setIsAddDoctorModalOpen(false); resetDoctorForm(); }}
+                  className="flex-1 py-2.5 border border-line bg-paper hover:bg-line text-[10px] font-bold font-mono uppercase transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 border border-ink bg-ink hover:bg-ink-soft text-paper text-[10px] font-bold font-mono uppercase flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Save Specialist Doctor</span>
                 </button>
               </div>
             </form>

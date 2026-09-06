@@ -78,8 +78,9 @@ export const DoctorDirectory: React.FC<DoctorDirectoryProps> = ({ initialSpecial
     { id: 'ENT Specialist', label: language === 'en' ? 'ENT' : 'নাক-কান-গলা' }
   ];
 
-  // Filter Doctors
+  // Filter Doctors (Only verified practitioners can accept patients)
   const filteredDoctors = doctors.filter((doc) => {
+    if (!doc.isVerified) return false;
     const matchesSpec = selectedSpecialty === 'all' || doc.specialty.toLowerCase() === selectedSpecialty.toLowerCase();
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch =

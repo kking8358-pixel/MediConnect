@@ -36,6 +36,7 @@ import {
   apiDeleteHospital,
   apiCreateDoctor,
   apiUpdateDoctor,
+  apiDeleteDoctor,
   apiVerifyDoctor,
   apiCreateSymptomCheck,
   apiCreateReport,
@@ -67,6 +68,7 @@ interface AppDataContextType {
   doctors: Doctor[];
   addDoctor: (doc: Omit<Doctor, 'id'>) => Doctor;
   updateDoctor: (id: string, updated: Partial<Doctor>) => void;
+  deleteDoctor: (id: string) => void;
   verifyDoctor: (doctorId: string, verified: boolean) => void;
 
   // Symptom Checks & Reports
@@ -392,32 +394,87 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Directory CRUD
   const addHospital = (hosp: Omit<Hospital, 'id'>) => {
     const id = `hosp-${Date.now()}`;
-    const item = { ...hosp, id };
-    setHospitals(prev => [item, ...prev]);
+    const item: Hospital = { ...hosp, id };
+    setHospitals(prev => {
+      const updated = [item, ...prev];
+      try {
+        localStorage.setItem('mc_hospitals', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     apiCreateHospital(item).catch(() => {});
   };
 
   const updateHospital = (id: string, updated: Partial<Hospital>) => {
-    setHospitals(prev => prev.map(h => h.id === id ? { ...h, ...updated } : h));
+    setHospitals(prev => {
+      const list = prev.map(h => h.id === id ? { ...h, ...updated } : h);
+      try {
+        localStorage.setItem('mc_hospitals', JSON.stringify(list));
+      } catch (e) {}
+      return list;
+    });
     apiUpdateHospital(id, updated).catch(() => {});
   };
 
   const deleteHospital = (id: string) => {
-    setHospitals(prev => prev.filter(h => h.id !== id));
+    setHospitals(prev => {
+      const list = prev.filter(h => h.id !== id);
+      try {
+        localStorage.setItem('mc_hospitals', JSON.stringify(list));
+      } catch (e) {}
+      return list;
+    });
     apiDeleteHospital(id).catch(() => {});
   };
 
   const addDoctor = (doc: Omit<Doctor, 'id'>): Doctor => {
     const id = `doc-${Date.now()}`;
-    const newDoc: Doctor = { ...doc, id };
-    setDoctors(prev => [newDoc, ...prev]);
+    const defaultAvailability = [
+      { day: 'Mon', slots: ['09:00 AM', '11:00 AM', '03:00 PM', '05:00 PM'] },
+      { day: 'Wed', slots: ['10:00 AM', '12:00 PM', '04:00 PM', '06:00 PM'] },
+      { day: 'Sat', slots: ['09:00 AM', '11:30 AM', '02:00 PM', '04:30 PM'] }
+    ];
+    const newDoc: Doctor = {
+      role: 'doctor',
+      availability: defaultAvailability,
+      rating: 5.0,
+      ratingCount: 0,
+      experienceYears: 5,
+      avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80',
+      ...doc,
+      id
+    };
+    setDoctors(prev => {
+      const updated = [newDoc, ...prev];
+      try {
+        localStorage.setItem('mc_doctors', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     apiCreateDoctor(newDoc).catch(() => {});
     return newDoc;
   };
 
   const updateDoctor = (id: string, updated: Partial<Doctor>) => {
-    setDoctors(prev => prev.map(d => d.id === id ? { ...d, ...updated } : d));
+    setDoctors(prev => {
+      const list = prev.map(d => d.id === id ? { ...d, ...updated } : d);
+      try {
+        localStorage.setItem('mc_doctors', JSON.stringify(list));
+      } catch (e) {}
+      return list;
+    });
     apiUpdateDoctor(id, updated).catch(() => {});
+  };
+
+  const deleteDoctor = (id: string) => {
+    setDoctors(prev => {
+      const list = prev.filter(d => d.id !== id);
+      try {
+        localStorage.setItem('mc_doctors', JSON.stringify(list));
+      } catch (e) {}
+      return list;
+    });
+    apiDeleteDoctor(id).catch(() => {});
   };
 
   const verifyDoctor = (doctorId: string, verified: boolean) => {
@@ -603,6 +660,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         doctors,
         addDoctor,
         updateDoctor,
+        deleteDoctor,
         verifyDoctor,
         symptomChecks,
         addSymptomCheck,

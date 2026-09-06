@@ -13,7 +13,8 @@ import {
   CheckCircle2,
   FileText,
   Pill,
-  LogOut
+  LogOut,
+  Lock
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
@@ -32,7 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenEmergency
 }) => {
   const { user, currentRole, language, setLanguage, openAuthModal, logout } = useAuth();
-  const { notifications, markNotificationRead, isDbConnected } = useAppData();
+  const { notifications, markNotificationRead, isDbConnected, doctors } = useAppData();
   const t = translations[language];
 
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
@@ -44,17 +45,20 @@ export const Navbar: React.FC<NavbarProps> = ({
     ? notifications.filter((n) => n.userId === user.id)
     : [];
   const unreadCount = visibleNotifications.filter(n => !n.read).length;
-  const isDoctorPending = currentRole === 'doctor' && user && !user.isVerified;
+  const isDoctorPending = currentRole === 'doctor' && !!user && !user.isVerified;
+  const pendingDoctorsCount = doctors.filter((d) => !d.isVerified).length;
 
-  const navItems = [
-    { id: 'dashboard', label: user ? t.dashboard : (language === 'en' ? 'Overview' : 'হোম') },
-    { id: 'symptom-checker', label: t.symptom_checker, icon: <Sparkles className="w-3.5 h-3.5" /> },
-    { id: 'discovery', label: t.find_care },
-    ...(user && currentRole === 'patient' ? [
-      { id: 'reports', label: t.my_reports, icon: <FileText className="w-3.5 h-3.5" /> },
-      { id: 'reminders', label: t.medicine_reminders, icon: <Pill className="w-3.5 h-3.5" /> },
-    ] : [])
-  ];
+  const navItems = isDoctorPending
+    ? []
+    : [
+        { id: 'dashboard', label: user ? t.dashboard : (language === 'en' ? 'Overview' : 'হোম') },
+        { id: 'symptom-checker', label: t.symptom_checker, icon: <Sparkles className="w-3.5 h-3.5" /> },
+        { id: 'discovery', label: t.find_care },
+        ...(user && currentRole === 'patient' ? [
+          { id: 'reports', label: t.my_reports, icon: <FileText className="w-3.5 h-3.5" /> },
+          { id: 'reminders', label: t.medicine_reminders, icon: <Pill className="w-3.5 h-3.5" /> },
+        ] : [])
+      ];
 
   return (
     <header className="sticky top-0 z-40 w-full bg-paper border-b-2 border-ink text-ink font-sans">
@@ -92,34 +96,43 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center gap-2">
-            {navItems.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`px-4 py-2 text-[10px] font-mono font-bold uppercase transition-colors flex items-center gap-2 border ${isActive
-                      ? 'bg-ink text-paper border-ink'
-                      : 'bg-paper text-ink-soft border-transparent hover:border-ink hover:text-ink'
-                    }`}
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
+            {isDoctorPending ? (
+              <div className="flex items-center gap-2 px-3 py-1.5 border border-line bg-paper-raised text-[10px] font-mono font-bold uppercase text-ink-soft">
+                <Lock className="w-3.5 h-3.5 text-clinical-red" />
+                <span>Account Pending Verification (Features Locked)</span>
+              </div>
+            ) : (
+              <>
+                {navItems.map((item) => {
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)}
+                      className={`px-4 py-2 text-[10px] font-mono font-bold uppercase transition-colors flex items-center gap-2 border ${isActive
+                          ? 'bg-ink text-paper border-ink'
+                          : 'bg-paper text-ink-soft border-transparent hover:border-ink hover:text-ink'
+                        }`}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
 
-            {currentRole === 'doctor' && (
-              <button
-                onClick={() => setActiveTab('doctor-portal')}
-                className={`px-4 py-2 text-[10px] font-mono font-bold uppercase transition-colors flex items-center gap-2 border ${activeTab === 'doctor-portal'
-                    ? 'bg-ink text-paper border-ink'
-                    : 'bg-paper text-ink border-ink hover:bg-ink-soft hover:text-paper'
-                  }`}
-              >
-                <Stethoscope className="w-3.5 h-3.5" />
-                <span>{t.doctor_portal}</span>
-              </button>
+                {currentRole === 'doctor' && (
+                  <button
+                    onClick={() => setActiveTab('doctor-portal')}
+                    className={`px-4 py-2 text-[10px] font-mono font-bold uppercase transition-colors flex items-center gap-2 border ${activeTab === 'doctor-portal'
+                        ? 'bg-ink text-paper border-ink'
+                        : 'bg-paper text-ink border-ink hover:bg-ink-soft hover:text-paper'
+                      }`}
+                  >
+                    <Stethoscope className="w-3.5 h-3.5" />
+                    <span>{t.doctor_portal}</span>
+                  </button>
+                )}
+              </>
             )}
 
             {currentRole === 'admin' && (
@@ -132,6 +145,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Shield className="w-3.5 h-3.5" />
                 <span>{t.admin_panel}</span>
+                {pendingDoctorsCount > 0 && (
+                  <span className="px-1.5 py-0.5 bg-clinical-red text-paper text-[9px] font-mono font-bold border border-paper animate-pulse">
+                    {pendingDoctorsCount} PENDING
+                  </span>
+                )}
               </button>
             )}
           </nav>
@@ -270,35 +288,49 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Mobile Navigation Scrollbar */}
         <div className="lg:hidden flex items-center gap-2 py-3 border-t border-line overflow-x-auto scrollbar-none">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`px-4 py-2 text-[10px] font-mono font-bold uppercase whitespace-nowrap transition-colors border ${activeTab === item.id
-                  ? 'bg-ink text-paper border-ink'
-                  : 'text-ink-soft bg-paper border-line hover:border-ink hover:text-ink'
-                }`}
-            >
-              {item.label}
-            </button>
-          ))}
-          {currentRole === 'doctor' && (
-            <button
-              onClick={() => setActiveTab('doctor-portal')}
-              className={`px-4 py-2 text-[10px] font-mono font-bold uppercase whitespace-nowrap border ${activeTab === 'doctor-portal' ? 'bg-ink text-paper border-ink' : 'text-ink bg-paper border-ink'
-                }`}
-            >
-              {t.doctor_portal}
-            </button>
-          )}
-          {currentRole === 'admin' && (
-            <button
-              onClick={() => setActiveTab('admin-panel')}
-              className={`px-4 py-2 text-[10px] font-mono font-bold uppercase whitespace-nowrap border ${activeTab === 'admin-panel' ? 'bg-ink text-paper border-ink' : 'text-ink bg-paper border-ink'
-                }`}
-            >
-              {t.admin_panel}
-            </button>
+          {isDoctorPending ? (
+            <div className="px-3 py-1.5 border border-amber-600 bg-amber-50 text-amber-900 text-[10px] font-mono font-bold uppercase flex items-center gap-2 w-full">
+              <span className="w-2 h-2 rounded-full bg-amber-600 animate-ping shrink-0" />
+              <span className="truncate">Verification Pending — Features Locked</span>
+            </div>
+          ) : (
+            <>
+              {navItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`px-4 py-2 text-[10px] font-mono font-bold uppercase whitespace-nowrap transition-colors border ${activeTab === item.id
+                      ? 'bg-ink text-paper border-ink'
+                      : 'text-ink-soft bg-paper border-line hover:border-ink hover:text-ink'
+                    }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+              {currentRole === 'doctor' && (
+                <button
+                  onClick={() => setActiveTab('doctor-portal')}
+                  className={`px-4 py-2 text-[10px] font-mono font-bold uppercase whitespace-nowrap border ${activeTab === 'doctor-portal' ? 'bg-ink text-paper border-ink' : 'text-ink bg-paper border-ink'
+                    }`}
+                >
+                  {t.doctor_portal}
+                </button>
+              )}
+              {currentRole === 'admin' && (
+                <button
+                  onClick={() => setActiveTab('admin-panel')}
+                  className={`px-4 py-2 text-[10px] font-mono font-bold uppercase whitespace-nowrap border flex items-center gap-2 ${activeTab === 'admin-panel' ? 'bg-ink text-paper border-ink' : 'text-ink bg-paper border-ink'
+                    }`}
+                >
+                  <span>{t.admin_panel}</span>
+                  {pendingDoctorsCount > 0 && (
+                    <span className="px-1.5 py-0.5 bg-clinical-red text-paper text-[9px] font-mono font-bold">
+                      {pendingDoctorsCount} PENDING
+                    </span>
+                  )}
+                </button>
+              )}
+            </>
           )}
         </div>
 

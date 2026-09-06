@@ -80,6 +80,30 @@ export async function apiUpdateProfile(id: string, data: any): Promise<User> {
   });
 }
 
+export async function apiForgotPassword(emailOrPhone: string): Promise<{
+  success: boolean;
+  message: string;
+  email?: string;
+  maskedEmail?: string;
+  code?: string;
+}> {
+  return request('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ emailOrPhone })
+  });
+}
+
+export async function apiResetPassword(
+  emailOrPhone: string,
+  code: string,
+  newPassword: string
+): Promise<{ success: boolean; message: string; user?: User }> {
+  return request('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ emailOrPhone, code, newPassword })
+  });
+}
+
 // ---------------- DOCTORS ----------------
 export async function apiGetDoctors(): Promise<Doctor[]> {
   return request<Doctor[]>('/doctors');
@@ -103,6 +127,12 @@ export async function apiVerifyDoctor(id: string, verified: boolean): Promise<Do
   return request<Doctor>(`/doctors/${encodeURIComponent(id)}/verify`, {
     method: 'PATCH',
     body: JSON.stringify({ verified })
+  });
+}
+
+export async function apiDeleteDoctor(id: string): Promise<void> {
+  return request<void>(`/doctors/${encodeURIComponent(id)}`, {
+    method: 'DELETE'
   });
 }
 

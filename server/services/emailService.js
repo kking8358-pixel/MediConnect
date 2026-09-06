@@ -324,3 +324,54 @@ MediConnect Clinical Coordination Team
 
   return sendMail({ to: targetEmail, subject, text, html });
 }
+
+/**
+ * Send password reset verification code email
+ */
+export async function sendPasswordResetEmail({ to, name, code }) {
+  const subject = `MediConnect Security: Your Password Reset Verification Code [${code}]`;
+  const text = `
+Dear ${name || 'User'},
+
+We received a request to reset your MediConnect account password.
+
+Your 6-digit verification code is: ${code}
+
+This code will expire in 15 minutes. If you did not initiate this request, you can safely ignore this email; your account remains secure.
+
+MediConnect Healthcare Security Team
+  `;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; border: 2px solid #000; background: #faf8f5; color: #111;">
+      <div style="border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 18px;">
+        <h2 style="margin: 0; text-transform: uppercase; letter-spacing: 1px; color: #111;">MediConnect Security</h2>
+        <p style="margin: 4px 0 0 0; font-size: 11px; font-family: monospace; color: #666; text-transform: uppercase;">PASSWORD RECOVERY VERIFICATION</p>
+      </div>
+      <p style="font-size: 14px; margin-bottom: 16px;">Hello <strong>${name || 'Member'}</strong>,</p>
+      <p style="font-size: 13px; line-height: 1.5; color: #444;">
+        We received a request to reset your MediConnect account credentials. Enter the verification code below to set a new password:
+      </p>
+      <div style="text-align: center; margin: 24px 0; padding: 18px; background: #fff; border: 2px solid #000;">
+        <span style="font-family: monospace; font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #000;">${code}</span>
+      </div>
+      <p style="font-size: 12px; color: #666; line-height: 1.5;">
+        This security code will expire in <strong>15 minutes</strong>. If you did not request a password reset, please ignore this email; your password remains unchanged.
+      </p>
+      <p style="font-size: 11px; color: #888; margin-top: 24px; border-top: 1px dashed #ccc; padding-top: 12px; font-family: monospace; text-transform: uppercase;">
+        MediConnect Healthcare Platform &bull; Automated Security Dispatch
+      </p>
+    </div>
+  `;
+
+  const adminUser = process.env.SMTP_USER ? process.env.SMTP_USER.trim() : '';
+  const isDemoEmail = !to || to.endsWith('@mediconnect.health') || to.endsWith('@example.com') || to.endsWith('@squarehospital.com') || to.endsWith('@evercarebd.com');
+  const targetEmail = (isDemoEmail && adminUser) ? adminUser : to;
+
+  if (isDemoEmail && adminUser) {
+    console.log(`[Mail Service] Note: Account "${name}" has demo address (${to}). Delivering password reset code to configured SMTP inbox: ${adminUser}`);
+  }
+
+  return sendMail({ to: targetEmail, subject, text, html });
+}
+

@@ -71,4 +71,15 @@ router.patch('/:id/verify', async (req, res) => {
   }
 });
 
+// DELETE /api/doctors/:id
+router.delete('/:id', async (req, res) => {
+  try {
+    const deleted = await UserModel.findOneAndDelete({ id: req.params.id, role: 'doctor' });
+    if (!deleted) return res.status(404).json({ error: 'Doctor not found' });
+    return res.json({ success: true, message: 'Doctor removed successfully' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

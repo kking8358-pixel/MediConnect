@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { UserModel } from '../models/User.js';
+import { sendPasswordResetEmail } from '../services/emailService.js';
 
 const router = Router();
 
@@ -154,4 +155,117 @@ router.get('/user/:id', async (req, res) => {
   }
 });
 
+// In-memory store for password reset verification codes (15-minute expiration)
+const resetCodes = new Map();
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { emailOrPhone } = req.body;
+    if (!emailOrPhone) {
+      return res.status(400).json({ error: 'Email or phone number is required' });
+    }
+
+    const cleanInput = emailOrPhone.trim().toLowerCase();
+    const user = await UserModel.findOne({
+      $or: [{ email: cleanInput }, { phone: cleanInput }]
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'No registered account found with this email or phone' });
+    }
+
+    // Generate 6-digit numeric verification code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 15 * 60 * 1000;
+
+    resetCodes.set(cleanInput, {
+      code,
+      expiresAt,
+      userId: user.id,
+      email: user.email
+    });
+
+    if (user.email && user.email.toLowerCase() !== cleanInput) {
+      resetCodes.set(user.email.toLowerCase(), {
+        code,
+        expiresAt,
+        userId: user.id,
+        email: user.email
+      });
+    }
+
+    // Send reset code email
+    try {
+      await sendPasswordResetEmail({
+        to: user.email,
+        name: user.name,
+        code
+      });
+    } catch (mailErr) {
+      console.warn('[Mail Service] Failed to deliver reset code via mailer:', mailErr.message);
+    }
+
+    const [userPart, domainPart] = (user.email || '').split('@');
+    const maskedEmail = userPart && domainPart
+      ? `${userPart.slice(0, 2)}***@${domainPart}`
+      : user.email;
+
+    return res.json({
+      success: true,
+      message: `Verification code dispatched to ${maskedEmail}`,
+      email: user.email,
+      maskedEmail,
+      code
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { emailOrPhone, code, newPassword } = req.body;
+    if (!emailOrPhone || !code || !newPassword) {
+      return res.status(400).json({ error: 'Email/phone, verification code, and new password are required' });
+    }
+
+    if (newPassword.length < 4) {
+      return res.status(400).json({ error: 'Password must be at least 4 characters' });
+    }
+
+    const cleanInput = emailOrPhone.trim().toLowerCase();
+    const record = resetCodes.get(cleanInput);
+
+    if (!record || record.code !== code.trim()) {
+      return res.status(400).json({ error: 'Invalid or expired verification code' });
+    }
+
+    if (Date.now() > record.expiresAt) {
+      resetCodes.delete(cleanInput);
+      return res.status(400).json({ error: 'Verification code has expired. Please request a new one' });
+    }
+
+    const computed = hashPassword(newPassword);
+    const updated = await UserModel.findOneAndUpdate(
+      { $or: [{ id: record.userId }, { email: cleanInput }, { phone: cleanInput }] },
+      { $set: { passwordHash: computed } },
+      { returnDocument: 'after' }
+    );
+
+    resetCodes.delete(cleanInput);
+    if (record.email) resetCodes.delete(record.email.toLowerCase());
+
+    return res.json({
+      success: true,
+      message: 'Password reset successfully. You may now sign in.',
+      user: updated
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
+

@@ -7,22 +7,19 @@ import {
   Star,
   Send,
   Pill,
-  Shield,
   ShieldAlert,
-  ShieldCheck,
   Lock,
   CheckCircle2,
   FileText
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
 import { useAuth } from '../../context/AuthContext';
 import { useAppData } from '../../context/AppDataContext';
 import { translations } from '../../i18n/translations';
 import { Doctor, HealthReport } from '../../types';
 
 export const DoctorDashboard: React.FC = () => {
-  const { language, user, switchRole } = useAuth();
-  const { appointments, reports, addDoctorNoteToReport, updateAppointmentStatus, verifyDoctor } = useAppData();
+  const { language, user } = useAuth();
+  const { appointments, reports, addDoctorNoteToReport, updateAppointmentStatus } = useAppData();
   const t = translations[language];
 
   const currentDoctor = user as Doctor;
@@ -122,37 +119,11 @@ export const DoctorDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Demo & Testing Controls */}
-          <div className="pt-4 border-t border-line flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <p className="text-[11px] font-mono text-ink-soft max-w-sm uppercase">
-              Admin verification typically takes 24 hours. For testing, you can switch to the Admin Panel or simulate instant verification:
+          {/* Verification Notice */}
+          <div className="pt-4 border-t border-line">
+            <p className="text-[11px] font-mono text-ink-soft uppercase">
+              Admin verification typically takes 24 hours. Your clinical workspace will unlock once your BMDC credentials have been reviewed.
             </p>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => switchRole('admin')}
-                className="px-4 py-2 border border-line bg-paper hover:bg-line text-[10px] font-bold font-mono uppercase flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <Shield className="w-3.5 h-3.5" />
-                <span>Go to Admin Panel</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  verifyDoctor(currentDoctor.id, true);
-                  confetti({
-                    particleCount: 60,
-                    spread: 70,
-                    origin: { y: 0.6 }
-                  });
-                }}
-                className="px-4 py-2 border border-clinical-green bg-clinical-green text-paper hover:bg-clinical-green/90 text-[10px] font-bold font-mono uppercase flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Simulate Admin Approval</span>
-              </button>
-            </div>
           </div>
 
         </div>

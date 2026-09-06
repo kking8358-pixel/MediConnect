@@ -53,6 +53,8 @@ const MainAppContent: React.FC = () => {
   const canViewDoctorPortal = !!user && currentRole === 'doctor';
   const canViewAdminPanel = !!user && currentRole === 'admin';
 
+  const isDoctorPending = !!user && currentRole === 'doctor' && !user.isVerified;
+
   return (
     <div className="min-h-screen flex flex-col bg-paper text-ink font-sans selection:bg-ink selection:text-paper">
 
@@ -65,7 +67,11 @@ const MainAppContent: React.FC = () => {
 
       {/* Main App Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'dashboard' && (
+        {isDoctorPending ? (
+          <DoctorDashboard />
+        ) : (
+          <>
+            {activeTab === 'dashboard' && (
           <>
             {!user && (
               <GuestDashboard
@@ -147,6 +153,8 @@ const MainAppContent: React.FC = () => {
               <p className="text-xs text-slate-500 mt-1">Please sign in with an administrator account to open this panel.</p>
             </div>
           )
+        )}
+          </>
         )}
       </main>
 
